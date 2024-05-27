@@ -6,13 +6,13 @@ pub struct BfContext {
     pub code: String,
     pointer: usize,
 }
+#[derive(Clone)]
 struct Loop {
     original_pointer: usize,
 }
 #[derive(Error, Debug)]
 #[error("Unclosed brackets or tried to close brackets with no matching opening bracket")]
 pub struct MismatchedBracketsError;
-
 impl BfContext {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
         let mut previous_end = 0;
@@ -183,6 +183,15 @@ impl BfContext {
             self.write_code(".");
         }
     }
+    pub fn read_char<'a,T: MarkSet+Into<ByteRef<'a,G>>,G: 'a>(&mut self,mut store_to: T){
+        store_to.mark_set();
+        let as_byte_ref=store_to.into();
+        self.point(as_byte_ref.pointer);
+        self.write_code(",")
+    }
+}
+struct BfFunction{
+    
 }
 pub struct ByteRef<'a, T> {
     data_index: usize,
@@ -270,10 +279,9 @@ mod test {
     use super::*;
     #[test]
     fn test_add() {
-        let mut ctx = BfContext::default();
-        let mut our_array = ctx.declare_array(10);
-        ctx.set_array("hello".as_bytes(), &mut our_array);
-        ctx.display_var(&our_array);
-        println!("{}",ctx.code);
+        let mut ctx=BfContext::default();
+        let mut store_to=ctx.declare_byte();
+        ctx.read_char(store_to.get_byte_ref());
+        
     }
 }
