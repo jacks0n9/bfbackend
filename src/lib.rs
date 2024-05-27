@@ -183,16 +183,23 @@ impl BfContext {
             self.write_code(".");
         }
     }
-    pub fn read_char<'a,T: MarkSet+Into<ByteRef<'a,G>>,G: 'a>(&mut self,mut store_to: T){
+    pub fn display_null_terminated_array(&mut self, var: &Variable<ArrayData>) {
+        self.point(var.pointer.start);
+        // make sure the loop pointer is empty
+        self.write_code("[-]>");
+        // go until we encounter null byte
+        self.write_code("[.>]");
+        // return to loop pointer
+        self.write_code("<[<]")
+    }
+    pub fn read_char<'a, T: MarkSet + Into<ByteRef<'a, G>>, G: 'a>(&mut self, mut store_to: T) {
         store_to.mark_set();
-        let as_byte_ref=store_to.into();
+        let as_byte_ref = store_to.into();
         self.point(as_byte_ref.pointer);
         self.write_code(",")
     }
 }
-struct BfFunction{
-    
-}
+struct BfFunction {}
 pub struct ByteRef<'a, T> {
     data_index: usize,
     pointer: usize,
@@ -279,9 +286,12 @@ mod test {
     use super::*;
     #[test]
     fn test_add() {
-        let mut ctx=BfContext::default();
-        let mut store_to=ctx.declare_byte();
-        ctx.read_char(store_to.get_byte_ref());
-        
+        let mut ctx = BfContext::default();
+        let mut store_to = ctx.declare_array(10);
+        let bytes = ["sussy".as_bytes(), &[0]].concat();
+        ctx.set_array(&bytes, &mut store_to);
+        ctx.display_null_terminated_array(&store_to);
+
+        println!("{}", ctx.code);
     }
 }
