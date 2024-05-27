@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use thiserror::Error;
 #[derive(Default)]
 pub struct BfContext {
@@ -8,10 +6,10 @@ pub struct BfContext {
     pub code: String,
     pointer: usize,
 }
-struct Loop{
-    original_pointer: usize
+struct Loop {
+    original_pointer: usize,
 }
-#[derive(Error,Debug)]
+#[derive(Error, Debug)]
 #[error("Unclosed brackets or tried to close brackets with no matching opening bracket")]
 pub struct MismatchedBracketsError;
 
@@ -40,50 +38,58 @@ impl BfContext {
         self.taken.push(range);
         self.taken.sort_by_key(|a| a.end())
     }
-    pub fn declare_var(&mut self, var_type: VarDeclareArgsType) -> Variable {
-        //loop pointer
-        let mut amount = 1;
-        match var_type {
-            VarDeclareArgsType::Array(size) => amount += size,
-            VarDeclareArgsType::Byte => amount += 1,
-        }
-        let var_type = match var_type {
-            VarDeclareArgsType::Byte => VarType::Byte {
-                has_been_set: false,
-            },
-            VarDeclareArgsType::Array(size) => VarType::ByteArray {
-                set_cells: Vec::new(),
-                data_len: size,
-            },
-        };
-        let pointer = self.reserve(amount);
+    pub fn declare_and_reserve<T>(&mut self, size: usize, data: T) -> Variable<T> {
+        let our_range = self.reserve(size);
         Variable {
-            var_type,
-            pointer,
             dynamic: false,
+            var_data: data,
+            pointer: our_range,
         }
     }
-    pub fn add_to_var(&mut self, to_add: i16, index: ByteRef) {
+    pub fn declare_byte(&mut self) -> Variable<ByteData> {
+        self.declare_and_reserve(
+            2,
+            ByteData {
+                has_been_set: false,
+            },
+        )
+    }
+    pub fn declare_array(&mut self, len: usize) -> Variable<ArrayData> {
+        self.declare_and_reserve(
+            len + 1,
+            ArrayData {
+                set_cells: Vec::new(),
+                data_len: len,
+            },
+        )
+    }
+    pub fn add_to_var<'a, T: MarkSet + Into<ByteRef<'a, G>>, G: 'a>(
+        &mut self,
+        to_add: i16,
+        mut byte_ref: T,
+    ) {
         if to_add == 0 {
             return;
         }
         let root = (to_add.abs() as f64).sqrt();
         let rounded = root.round();
-        self.point(index.var.pointer.start);
+        byte_ref.mark_set();
+        let as_byte_ref = byte_ref.into();
+        self.point(as_byte_ref.var.pointer.start);
         let inner_add = if to_add.is_positive() { "+" } else { "-" }.repeat(rounded as usize);
 
         let square_loop = format!(
             "{}[-{}{}{}]",
             "+".repeat(rounded as usize),
-            ">".repeat(index.data_index + 1),
+            ">".repeat(as_byte_ref.data_index + 1),
             inner_add,
-            "<".repeat(index.data_index + 1)
+            "<".repeat(as_byte_ref.data_index + 1)
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
         let diff_from_needed = rounded_squared.abs_diff(to_add.into()) as usize;
         if diff_from_needed != 0 {
-            self.point_add(index.data_index + 1);
+            self.point_add(as_byte_ref.data_index + 1);
             let extra = if (rounded_squared * to_add.signum() as i32) < to_add.into() {
                 "+"
             } else {
@@ -92,43 +98,40 @@ impl BfContext {
             .repeat(diff_from_needed);
             self.write_code(&extra);
         }
-        let var_mut = index.var;
-        let var_type = var_mut.var_type.borrow_mut();
-        match var_type {
-            VarType::Byte {
-                ref mut has_been_set,
-            } => *has_been_set = true,
-            VarType::ByteArray {
-                ref mut set_cells, ..
-            } => set_cells.push(index.data_index),
-        }
     }
-    pub fn set_variable(&mut self, to_set: u8, index: ByteRef) {
-        if index.has_been_set() {
-            self.point(index.pointer);
+    pub fn set_variable<'a, T: Clone + HasBeenSet + MarkSet + Into<ByteRef<'a, G>>, G: 'a>(
+        &mut self,
+        to_set: u8,
+        index: T,
+    ) {
+        let has_been_set = index.has_been_set();
+        let og = index.clone();
+        let as_byte_ref = index.into();
+        if has_been_set {
+            self.point(as_byte_ref.pointer);
             self.write_code("[-]");
         }
-        self.add_to_var(to_set as i16, index)
+        self.add_to_var(to_set as i16, og)
     }
-    pub fn set_array(&mut self, values: &[u8], var: &mut Variable) {
-        let average_sqrt=((values.iter().map(|num|(*num as f64).sqrt()).sum::<f64>())/values.len() as f64) as u8;
-        let divided=values.iter().map(|num|num/average_sqrt);
-        let remainders=values.iter().map(|num|num%average_sqrt);
+    pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
+        let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
+            / values.len() as f64) as u8;
+        let divided = values.iter().map(|num| num / average_sqrt);
+        let remainders = values.iter().map(|num| num % average_sqrt);
         self.point(&*var);
         self.write_code(&"+".repeat(average_sqrt.into()));
         self.start_loop();
         self.write_code("-");
-        for factor in divided{
+        for factor in divided {
             self.point_add(1);
             self.write_code(&"+".repeat(factor.into()));
         }
         self.point(&*var);
-        let _=self.end_loop();
-        for remainder in remainders{
+        let _ = self.end_loop();
+        for remainder in remainders {
             self.point_add(1);
             self.write_code(&"+".repeat(remainder.into()));
         }
-        
     }
     fn write_code(&mut self, code: &str) {
         self.code += code
@@ -141,14 +144,16 @@ impl BfContext {
         self.point(self.pointer + add)
     }
     fn point_sub(&mut self, sub: usize) {
-        self.point(self.pointer -sub)
+        self.point(self.pointer - sub)
     }
-    pub fn start_loop(&mut self){
+    pub fn start_loop(&mut self) {
         self.write_code("[");
-        self.loops.push(Loop { original_pointer: self.pointer })
+        self.loops.push(Loop {
+            original_pointer: self.pointer,
+        })
     }
-    pub fn end_loop(&mut self)->Result<(),MismatchedBracketsError>{
-        let loop_we_are_closing=self.loops.pop().ok_or(MismatchedBracketsError)?;
+    pub fn end_loop(&mut self) -> Result<(), MismatchedBracketsError> {
+        let loop_we_are_closing = self.loops.pop().ok_or(MismatchedBracketsError)?;
         self.point(loop_we_are_closing.original_pointer);
         self.write_code("]");
         Ok(())
@@ -159,9 +164,9 @@ impl BfContext {
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
         self.pointer = location
     }
-    pub fn clear_cells(&mut self,var: &Variable){
+    pub fn clear_cells<T>(&mut self, var: &Variable<T>) {
         self.point(var);
-        for _ in 0..var.pointer.offset{
+        for _ in 0..var.pointer.offset {
             self.write_code("[-]");
             self.point_add(1);
         }
@@ -171,7 +176,7 @@ impl BfContext {
         self.reserve_and_point(used);
         self.write_code(&generated);
     }
-    pub fn display_var(&mut self, var: &Variable) {
+    pub fn display_var<T>(&mut self, var: &Variable<T>) {
         self.point(var.pointer.start);
         for _ in 1..var.pointer.end() {
             self.point_add(1);
@@ -179,43 +184,57 @@ impl BfContext {
         }
     }
 }
-pub struct ByteRef<'a> {
+pub struct ByteRef<'a, T> {
     data_index: usize,
     pointer: usize,
-    var: &'a mut Variable,
+    var: &'a mut Variable<T>,
 }
-impl ByteRef<'_> {
+pub trait MarkSet {
+    fn mark_set(&mut self);
+}
+pub trait HasBeenSet {
+    fn has_been_set(&self) -> bool;
+}
+impl HasBeenSet for ByteRef<'_, ByteData> {
     fn has_been_set(&self) -> bool {
-        match &self.var.var_type {
-            VarType::Byte { has_been_set } => *has_been_set,
-            VarType::ByteArray { set_cells, .. } => set_cells.contains(&self.data_index),
-        }
+        self.var.var_data.has_been_set
     }
 }
-pub enum VarDeclareArgsType {
-    Array(usize),
-    Byte,
+impl MarkSet for ByteRef<'_, ByteData> {
+    fn mark_set(&mut self) {
+        self.var.var_data.has_been_set = true
+    }
+}
+impl HasBeenSet for ByteRef<'_, ArrayData> {
+    fn has_been_set(&self) -> bool {
+        self.var.var_data.set_cells.contains(&self.data_index)
+    }
+}
+impl MarkSet for ByteRef<'_, ArrayData> {
+    fn mark_set(&mut self) {
+        self.var.var_data.set_cells.push(self.data_index)
+    }
 }
 
-pub struct Variable {
+pub struct Variable<T> {
     dynamic: bool,
-    var_type: VarType,
+    var_data: T,
     pointer: MemoryRange,
 }
-enum VarType {
-    Byte {
-        has_been_set: bool,
-    },
-    ByteArray {
-        set_cells: Vec<usize>,
-        data_len: usize,
-    },
+
+pub struct ByteData {
+    has_been_set: bool,
 }
-impl Variable {
-    pub fn get_byte_ref(&mut self, data_index: usize) -> ByteRef {
+pub struct ArrayData {
+    set_cells: Vec<usize>,
+    data_len: usize,
+}
+
+impl Variable<ByteData> {
+    pub fn get_byte_ref(&mut self) -> ByteRef<ByteData> {
         ByteRef {
-            pointer: self.pointer.start + 1 + data_index,
-            data_index,
+            pointer: self.pointer.start + 1,
+            data_index: 0,
             var: self,
         }
     }
@@ -228,7 +247,7 @@ impl Pointable for usize {
         *self
     }
 }
-impl Pointable for &Variable {
+impl<T> Pointable for &Variable<T> {
     fn get_location(&self) -> usize {
         self.pointer.start
     }
@@ -252,9 +271,9 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut var = ctx.declare_var(VarDeclareArgsType::Array(25));
-        ctx.set_array("when the imposter is sus".as_bytes(), &mut var);
-        ctx.display_var(&var);
-        println!("{}", ctx.code);
+        let mut our_array = ctx.declare_array(10);
+        ctx.set_array("hello".as_bytes(), &mut our_array);
+        ctx.display_var(&our_array);
+        println!("{}",ctx.code);
     }
 }
