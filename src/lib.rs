@@ -1,10 +1,20 @@
 use std::borrow::BorrowMut;
+
+use thiserror::Error;
 #[derive(Default)]
 pub struct BfContext {
     taken: Vec<MemoryRange>,
+    loops: Vec<Loop>,
     pub code: String,
     pointer: usize,
 }
+struct Loop{
+    original_pointer: usize
+}
+#[derive(Error,Debug)]
+#[error("Unclosed brackets or tried to close brackets with no matching opening bracket")]
+pub struct MismatchedBracketsError;
+
 impl BfContext {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
         let mut previous_end = 0;
@@ -104,15 +114,16 @@ impl BfContext {
         let average_sqrt=((values.iter().map(|num|(*num as f64).sqrt()).sum::<f64>())/values.len() as f64) as u8;
         let divided=values.iter().map(|num|num/average_sqrt);
         let remainders=values.iter().map(|num|num%average_sqrt);
-        self.point(var.pointer.start);
+        self.point(&*var);
         self.write_code(&"+".repeat(average_sqrt.into()));
-        self.write_code("[-");
+        self.start_loop();
+        self.write_code("-");
         for factor in divided{
             self.point_add(1);
             self.write_code(&"+".repeat(factor.into()));
         }
-        self.point(var.pointer.start);
-        self.write_code("]");
+        self.point(&*var);
+        let _=self.end_loop();
         for remainder in remainders{
             self.point_add(1);
             self.write_code(&"+".repeat(remainder.into()));
@@ -132,12 +143,28 @@ impl BfContext {
     fn point_sub(&mut self, sub: usize) {
         self.point(self.pointer -sub)
     }
-    
+    pub fn start_loop(&mut self){
+        self.write_code("[");
+        self.loops.push(Loop { original_pointer: self.pointer })
+    }
+    pub fn end_loop(&mut self)->Result<(),MismatchedBracketsError>{
+        let loop_we_are_closing=self.loops.pop().ok_or(MismatchedBracketsError)?;
+        self.point(loop_we_are_closing.original_pointer);
+        self.write_code("]");
+        Ok(())
+    }
     fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_location();
         let diff = location.abs_diff(self.pointer);
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
         self.pointer = location
+    }
+    pub fn clear_cells(&mut self,var: &Variable){
+        self.point(var);
+        for _ in 0..var.pointer.offset{
+            self.write_code("[-]");
+            self.point_add(1);
+        }
     }
     pub fn display_text(&mut self, text: &str) {
         let (generated, used) = bftextmaker::gen_code(text, 15);
@@ -169,6 +196,7 @@ pub enum VarDeclareArgsType {
     Array(usize),
     Byte,
 }
+
 pub struct Variable {
     dynamic: bool,
     var_type: VarType,
@@ -184,7 +212,7 @@ enum VarType {
     },
 }
 impl Variable {
-    fn get_byte_ref(&mut self, data_index: usize) -> ByteRef {
+    pub fn get_byte_ref(&mut self, data_index: usize) -> ByteRef {
         ByteRef {
             pointer: self.pointer.start + 1 + data_index,
             data_index,
@@ -207,9 +235,9 @@ impl Pointable for &Variable {
 }
 #[derive(Clone, Copy)]
 struct MemoryRange {
-    // First usable memory is this cell
+    /// First usable memory is this cell
     start: usize,
-    // Last usable memory is (start+offset)-1
+    /// Last usable memory is (start+offset)-1
     offset: usize,
 }
 impl MemoryRange {
