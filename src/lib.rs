@@ -99,19 +99,16 @@ impl BfContext {
             self.write_code(&extra);
         }
     }
-    pub fn set_variable<'a, T: Clone + HasBeenSet + MarkSet + Into<ByteRef<'a, G>>, G: 'a>(
+    pub fn set_variable<'a, T: HasBeenSet + MarkSet + GetPointer + Into<ByteRef<'a, G>>, G: 'a>(
         &mut self,
         to_set: u8,
         index: T,
     ) {
-        let has_been_set = index.has_been_set();
-        let og = index.clone();
-        let as_byte_ref = index.into();
-        if has_been_set {
-            self.point(as_byte_ref.pointer);
+        if index.has_been_set() {
+            self.point(index.get_pointer());
             self.write_code("[-]");
         }
-        self.add_to_var(to_set as i16, og)
+        self.add_to_var(to_set as i16, index)
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
         let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
@@ -198,6 +195,23 @@ impl BfContext {
         self.point(as_byte_ref.pointer);
         self.write_code(",")
     }
+    /// Reads until a null byte or max size
+    pub fn read_string(&mut self, store_to: &mut Variable<ArrayData>, max_len: u8) {}
+    //>[[-<+>]>] to shift all cells over
+    /// Read the data len of the array-1 characters. If your interpreter doesn't ask for input during execution, this will hang if not given enough characters
+    pub fn read_n_chars(&mut self, store_to: &mut Variable<ArrayData>) {
+        let amount = store_to.var_data.data_len.try_into().unwrap_or(255);
+        self.set_variable(amount - 2, store_to.get_byte_ref(0));
+        self.point(store_to.pointer.start + 1);
+        self.write_code("[-<+>]");
+        self.point_add(1);
+        // read n bytes
+        self.write_code(",<<[>>[>],[<]<-]");
+        self.point_add(2);
+        // shift all cells over one
+        self.write_code("[[-<+>]>]");
+        self.pointer=store_to.pointer.end()+1
+    }
 }
 struct BfFunction {}
 pub struct ByteRef<'a, T> {
@@ -210,6 +224,14 @@ pub trait MarkSet {
 }
 pub trait HasBeenSet {
     fn has_been_set(&self) -> bool;
+}
+pub trait GetPointer {
+    fn get_pointer(&self) -> usize;
+}
+impl<T> GetPointer for ByteRef<'_, T> {
+    fn get_pointer(&self) -> usize {
+        self.pointer
+    }
 }
 impl HasBeenSet for ByteRef<'_, ByteData> {
     fn has_been_set(&self) -> bool {
@@ -231,7 +253,7 @@ impl MarkSet for ByteRef<'_, ArrayData> {
         self.var.var_data.set_cells.push(self.data_index)
     }
 }
-
+#[derive(Clone)]
 pub struct Variable<T> {
     dynamic: bool,
     var_data: T,
@@ -251,6 +273,15 @@ impl Variable<ByteData> {
         ByteRef {
             pointer: self.pointer.start + 1,
             data_index: 0,
+            var: self,
+        }
+    }
+}
+impl Variable<ArrayData> {
+    pub fn get_byte_ref(&mut self, data_index: usize) -> ByteRef<ArrayData> {
+        ByteRef {
+            pointer: self.pointer.start + 1 + data_index,
+            data_index,
             var: self,
         }
     }
@@ -287,11 +318,9 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut store_to = ctx.declare_array(10);
-        let bytes = ["sussy".as_bytes(), &[0]].concat();
-        ctx.set_array(&bytes, &mut store_to);
-        ctx.display_null_terminated_array(&store_to);
-
+        let mut store_to = ctx.declare_array(3);
+        ctx.read_n_chars(&mut store_to);
+        ctx.display_text("Thank you for writing");
         println!("{}", ctx.code);
     }
 }
