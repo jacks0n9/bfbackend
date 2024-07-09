@@ -179,7 +179,7 @@ impl BfContext {
         let text_var = self.declare_array(used - 1);
         self.point(text_var.pointer.start);
         self.write_code(&generated);
-        self.pointer = (text_var.pointer.start+text_var.pointer.offset)-1;
+        self.pointer = (text_var.pointer.start + text_var.pointer.offset) - 1;
         self.free_optional(text_var);
     }
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
@@ -313,7 +313,7 @@ impl BfContext {
             }
             ComparisonType::LeftGreaterThanRight => todo!(),
             ComparisonType::LeftLessThanRight => todo!(),
-            ComparisonType::NotEquals =>{
+            ComparisonType::NotEquals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(2);
                 let temp_cell = self.reserve(1);
                 let left_temp = comparison_space.pointer.start + 1;
@@ -323,7 +323,7 @@ impl BfContext {
                     condition.right.pointer.start + 1,
                     right_temp,
                     temp_cell.start,
-                );                
+                );
                 self.point(left_temp);
                 self.start_loop();
                 self.write_code("-");
@@ -336,25 +336,26 @@ impl BfContext {
                 self.point(right_temp);
                 self.write_code("]");
                 self.free_optional(comparison_space);
-            },
+            }
         }
     }
-    pub fn do_if_nonzero(&mut self,var: &Variable<ByteData>,code: impl Fn(&mut BfContext)){
-        let zero_cell=self.declare_byte();
+    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl Fn(&mut BfContext)) {
+        let zero_cell = self.declare_byte();
         self.point(var.pointer.start);
         self.write_code("+");
         self.point_add(1);
         self.write_code("[");
         code(self);
-        self.point(zero_cell.pointer.start+1);
+        self.point(zero_cell.pointer.start + 1);
         self.write_code("]");
         self.point_sub(1);
         self.write_code("[");
         // drain the loop pointer completely in case there were leftover data in it
+        self.pointer = var.pointer.start;
+        self.point(zero_cell.pointer.start);
+        self.write_code("]");
+        self.point(var.pointer.start);
         self.write_code("[-]");
-        self.pointer=var.pointer.start+1;
-        self.point(zero_cell.pointer.start+1);
-        self.write_code("]")
     }
 }
 pub struct IfCondition<'a> {
@@ -474,11 +475,9 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut answer=ctx.declare_byte();
-        ctx.set_variable(0, answer.get_byte_ref());
-        ctx.do_if_nonzero(&answer, |ctx|{
-            ctx.display_text("hello baka")
-        });
+        let mut answer = ctx.declare_byte();
+        ctx.set_variable(5, answer.get_byte_ref());
+        ctx.do_if_nonzero(&answer, |ctx| {});
         println!("{}", ctx.code);
     }
 }
