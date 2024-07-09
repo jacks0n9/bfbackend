@@ -5,6 +5,7 @@ pub struct BfContext {
     loops: Vec<Loop>,
     pub code: String,
     pointer: usize,
+    must_free: bool
 }
 #[derive(Clone)]
 struct Loop {
@@ -74,7 +75,7 @@ impl BfContext {
         let root = (to_add.abs() as f64).sqrt();
         let rounded = root.round();
         byte_ref.mark_set();
-        let as_byte_ref = byte_ref.into();
+        let as_byte_ref:ByteRef<'a,_> = byte_ref.into();
         self.point(as_byte_ref.var.pointer.start);
         let inner_add = if to_add.is_positive() { "+" } else { "-" }.repeat(rounded as usize);
 
@@ -147,12 +148,16 @@ impl BfContext {
         self.write_code("[");
         self.loops.push(Loop {
             original_pointer: self.pointer,
-        })
+        });
+        self.must_free=true
     }
     pub fn end_loop(&mut self) -> Result<(), MismatchedBracketsError> {
         let loop_we_are_closing = self.loops.pop().ok_or(MismatchedBracketsError)?;
         self.point(loop_we_are_closing.original_pointer);
         self.write_code("]");
+        if self.loops.is_empty(){
+            self.must_free=false;
+        }
         Ok(())
     }
     fn point<T: Pointable>(&mut self, location: T) {
@@ -170,8 +175,11 @@ impl BfContext {
     }
     pub fn display_text(&mut self, text: &str) {
         let (generated, used) = bftextmaker::gen_code(text, 15);
-        self.reserve_and_point(used);
+        //-1 for loop pointer which is not needed
+        let text_var=self.declare_array(used-1);
+        self.point(text_var.pointer.start);
         self.write_code(&generated);
+        self.free_optional(text_var);
     }
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
         self.point(var.pointer.start);
@@ -236,6 +244,16 @@ impl BfContext {
         }
         cloned
     }
+    pub fn free<T>(&mut self,var: Variable<T>){
+        self.clear_cells(&var);
+        self.taken=self.taken.iter().copied().filter(|range|range.start!=var.pointer.start).collect();
+    }
+    pub fn free_optional<T>(&mut self,var: Variable<T>){
+        if self.must_free{
+            self.free(var);
+        }
+    }
+
 }
 
 struct BfFunction {}
@@ -344,9 +362,7 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut to_clone=ctx.declare_array(2);
-        ctx.set_array(&[10,20], &mut to_clone);
-        ctx.clone(&to_clone);
+        ctx.display_text("abc");
         println!("{}", ctx.code);
     }
 }
