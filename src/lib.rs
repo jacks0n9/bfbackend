@@ -179,6 +179,7 @@ impl BfContext {
         let text_var=self.declare_array(used-1);
         self.point(text_var.pointer.start);
         self.write_code(&generated);
+        self.pointer+=used-1;
         self.free_optional(text_var);
     }
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
@@ -362,7 +363,13 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        ctx.display_text("abc");
+        let mut counter=ctx.declare_byte();
+        ctx.point(counter.pointer.start+1);
+        ctx.write_code("++++");
+        ctx.start_loop();
+        ctx.write_code("-");
+        ctx.display_text("anl");
+        ctx.end_loop().unwrap();
         println!("{}", ctx.code);
     }
 }
