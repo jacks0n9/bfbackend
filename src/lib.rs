@@ -277,17 +277,13 @@ impl BfContext {
     pub fn do_if(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
         let comparison_space = self.declare_array(4);
         let temp_cell = self.reserve(1);
-        let left_temp=comparison_space.pointer.start + 1;
-        let right_temp=comparison_space.pointer.start + 2;
-        let zero=comparison_space.pointer.start + 3;
-        let marker=comparison_space.pointer.start + 4;
+        let left_temp = comparison_space.pointer.start + 1;
+        let right_temp = comparison_space.pointer.start + 2;
+        let zero = comparison_space.pointer.start + 3;
+        let marker = comparison_space.pointer.start + 4;
+        self.clone_cell(condition.left.pointer.start + 1, left_temp, temp_cell.start);
         self.clone_cell(
-            condition.left.pointer.start+1,
-            left_temp,
-            temp_cell.start,
-        );
-        self.clone_cell(
-            condition.right.pointer.start+1,
+            condition.right.pointer.start + 1,
             right_temp,
             temp_cell.start,
         );
@@ -298,7 +294,7 @@ impl BfContext {
                 self.write_code("-");
                 self.point(right_temp);
                 self.write_code("-");
-                let _=self.end_loop();
+                let _ = self.end_loop();
                 self.point(marker);
                 self.write_code("+");
                 self.point(left_temp);
@@ -306,7 +302,7 @@ impl BfContext {
                 self.point(right_temp);
                 self.write_code("[<->>]");
                 self.write_code(">[<]");
-                self.pointer=zero;
+                self.pointer = zero;
                 self.point(left_temp);
                 self.write_code("[");
                 self.write_code("-");
@@ -314,6 +310,9 @@ impl BfContext {
                 self.point(left_temp);
                 self.write_code("]");
             }
+            ComparisonType::LeftGreaterThanRight => todo!(),
+            ComparisonType::LeftLessThanRight => todo!(),
+            ComparisonType::NotEquals => todo!(),
         }
         self.free_optional(comparison_space);
     }
@@ -325,6 +324,9 @@ pub struct IfCondition<'a> {
 }
 pub enum ComparisonType {
     Equals,
+    NotEquals,
+    LeftGreaterThanRight,
+    LeftLessThanRight,
 }
 struct BfFunction {}
 pub struct ByteRef<'a, T> {
@@ -432,19 +434,22 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let var1=ctx.declare_byte();
-        let var2=ctx.declare_byte();
-        ctx.point(var1.pointer.start+1);
+        let var1 = ctx.declare_byte();
+        let var2 = ctx.declare_byte();
+        ctx.point(var1.pointer.start + 1);
         ctx.write_code("++");
-        ctx.point(var2.pointer.start+1);
+        ctx.point(var2.pointer.start + 1);
         ctx.write_code("+++");
-        ctx.do_if(IfCondition{
-            left: &var1,
-            right: &var2,
-            comparsion_type: ComparisonType::Equals
-        }, |ctx: &mut BfContext|{
-            ctx.display_text("sus");
-        });
+        ctx.do_if(
+            IfCondition {
+                left: &var1,
+                right: &var2,
+                comparsion_type: ComparisonType::Equals,
+            },
+            |ctx: &mut BfContext| {
+                ctx.display_text("sus");
+            },
+        );
         println!("{}", ctx.code);
     }
 }
