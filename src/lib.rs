@@ -274,7 +274,7 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
-    pub fn do_if(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
+    pub fn do_if_compare(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
         match condition.comparsion_type {
             ComparisonType::Equals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(4);
@@ -338,6 +338,23 @@ impl BfContext {
                 self.free_optional(comparison_space);
             },
         }
+    }
+    pub fn do_if_nonzero(&mut self,var: &Variable<ByteData>,code: impl Fn(&mut BfContext)){
+        let zero_cell=self.declare_byte();
+        self.point(var.pointer.start);
+        self.write_code("+");
+        self.point_add(1);
+        self.write_code("[");
+        code(self);
+        self.point(zero_cell.pointer.start+1);
+        self.write_code("]");
+        self.point_sub(1);
+        self.write_code("[");
+        // drain the loop pointer completely in case there were leftover data in it
+        self.write_code("[-]");
+        self.pointer=var.pointer.start+1;
+        self.point(zero_cell.pointer.start+1);
+        self.write_code("]")
     }
 }
 pub struct IfCondition<'a> {
@@ -458,16 +475,9 @@ mod test {
     fn test_add() {
         let mut ctx = BfContext::default();
         let mut answer=ctx.declare_byte();
-        ctx.set_variable(98, answer.get_byte_ref());
-        ctx.display_text("enter a letter\n");
-        let mut input=ctx.declare_byte();
-        ctx.read_char(input.get_byte_ref());
-        ctx.do_if(IfCondition{
-            left: &answer,
-            right: &input,
-            comparsion_type: ComparisonType::Equals,
-        }, |ctx|{
-            ctx.display_text("you win")
+        ctx.set_variable(0, answer.get_byte_ref());
+        ctx.do_if_nonzero(&answer, |ctx|{
+            ctx.display_text("hello baka")
         });
         println!("{}", ctx.code);
     }
