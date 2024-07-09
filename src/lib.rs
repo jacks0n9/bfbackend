@@ -274,7 +274,7 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
-    pub fn do_if<T>(&mut self, condition: IfCondition<T>, code: impl Fn(&mut BfContext)) {
+    pub fn do_if(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
         let comparison_space = self.declare_array(4);
         let temp_cell = self.reserve(1);
         let left_temp=comparison_space.pointer.start + 1;
@@ -318,9 +318,9 @@ impl BfContext {
         self.free_optional(comparison_space);
     }
 }
-pub struct IfCondition<'a, T> {
-    left: &'a Variable<T>,
-    right: &'a Variable<T>,
+pub struct IfCondition<'a> {
+    left: &'a Variable<ByteData>,
+    right: &'a Variable<ByteData>,
     comparsion_type: ComparisonType,
 }
 pub enum ComparisonType {
