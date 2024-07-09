@@ -179,7 +179,7 @@ impl BfContext {
         let text_var = self.declare_array(used - 1);
         self.point(text_var.pointer.start);
         self.write_code(&generated);
-        self.pointer += used - 1;
+        self.pointer = (text_var.pointer.start+text_var.pointer.offset)-1;
         self.free_optional(text_var);
     }
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
@@ -457,22 +457,18 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let var1 = ctx.declare_byte();
-        let var2 = ctx.declare_byte();
-        ctx.point(var1.pointer.start + 1);
-        ctx.write_code("++");
-        ctx.point(var2.pointer.start + 1);
-        ctx.write_code("+++");
-        ctx.do_if(
-            IfCondition {
-                left: &var1,
-                right: &var2,
-                comparsion_type: ComparisonType::NotEquals,
-            },
-            |ctx: &mut BfContext| {
-                ctx.display_text("sus");
-            },
-        );
+        let mut answer=ctx.declare_byte();
+        ctx.set_variable(98, answer.get_byte_ref());
+        ctx.display_text("enter a letter\n");
+        let mut input=ctx.declare_byte();
+        ctx.read_char(input.get_byte_ref());
+        ctx.do_if(IfCondition{
+            left: &answer,
+            right: &input,
+            comparsion_type: ComparisonType::Equals,
+        }, |ctx|{
+            ctx.display_text("you win")
+        });
         println!("{}", ctx.code);
     }
 }
