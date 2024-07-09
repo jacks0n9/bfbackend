@@ -212,7 +212,32 @@ impl BfContext {
         self.write_code("[[-<+>]>]");
         self.pointer=store_to.pointer.end()+1
     }
+    fn clone_cell(&mut self,origin: usize,destination: usize,temp_cell:usize){
+        self.point(origin);
+        self.start_loop();
+        self.write_code("-");
+        self.point(destination);
+        self.write_code("+");
+        self.point(temp_cell);
+        self.write_code("+");
+        let _=self.end_loop();
+        self.point(temp_cell);
+        self.start_loop();
+        self.write_code("-");
+        self.point(origin);
+        self.write_code("+");
+        let _=self.end_loop();
+    }
+    pub fn clone<T:Clone>(&mut self,var: &Variable<T>)->Variable<T>{
+        let cloned=self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
+        let temp_cell=self.reserve(1).start;
+        for offset in 0..var.pointer.offset{
+            self.clone_cell(var.pointer.start+offset, cloned.pointer.start+offset, temp_cell)
+        }
+        cloned
+    }
 }
+
 struct BfFunction {}
 pub struct ByteRef<'a, T> {
     data_index: usize,
@@ -259,10 +284,11 @@ pub struct Variable<T> {
     var_data: T,
     pointer: MemoryRange,
 }
-
+#[derive(Clone)]
 pub struct ByteData {
     has_been_set: bool,
 }
+#[derive(Clone)]
 pub struct ArrayData {
     set_cells: Vec<usize>,
     data_len: usize,
@@ -318,9 +344,9 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut store_to = ctx.declare_array(3);
-        ctx.read_n_chars(&mut store_to);
-        ctx.display_text("Thank you for writing");
+        let mut to_clone=ctx.declare_array(2);
+        ctx.set_array(&[10,20], &mut to_clone);
+        ctx.clone(&to_clone);
         println!("{}", ctx.code);
     }
 }
