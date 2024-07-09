@@ -5,7 +5,7 @@ pub struct BfContext {
     loops: Vec<Loop>,
     pub code: String,
     pointer: usize,
-    must_free: bool
+    must_free: bool,
 }
 #[derive(Clone)]
 struct Loop {
@@ -75,7 +75,7 @@ impl BfContext {
         let root = (to_add.abs() as f64).sqrt();
         let rounded = root.round();
         byte_ref.mark_set();
-        let as_byte_ref:ByteRef<'a,_> = byte_ref.into();
+        let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
         self.point(as_byte_ref.var.pointer.start);
         let inner_add = if to_add.is_positive() { "+" } else { "-" }.repeat(rounded as usize);
 
@@ -149,14 +149,14 @@ impl BfContext {
         self.loops.push(Loop {
             original_pointer: self.pointer,
         });
-        self.must_free=true
+        self.must_free = true
     }
     pub fn end_loop(&mut self) -> Result<(), MismatchedBracketsError> {
         let loop_we_are_closing = self.loops.pop().ok_or(MismatchedBracketsError)?;
         self.point(loop_we_are_closing.original_pointer);
         self.write_code("]");
-        if self.loops.is_empty(){
-            self.must_free=false;
+        if self.loops.is_empty() {
+            self.must_free = false;
         }
         Ok(())
     }
@@ -176,10 +176,10 @@ impl BfContext {
     pub fn display_text(&mut self, text: &str) {
         let (generated, used) = bftextmaker::gen_code(text, 15);
         //-1 for loop pointer which is not needed
-        let text_var=self.declare_array(used-1);
+        let text_var = self.declare_array(used - 1);
         self.point(text_var.pointer.start);
         self.write_code(&generated);
-        self.pointer+=used-1;
+        self.pointer += used - 1;
         self.free_optional(text_var);
     }
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
@@ -219,9 +219,9 @@ impl BfContext {
         self.point_add(2);
         // shift all cells over one
         self.write_code("[[-<+>]>]");
-        self.pointer=store_to.pointer.end()+1
+        self.pointer = store_to.pointer.end() + 1
     }
-    fn clone_cell(&mut self,origin: usize,destination: usize,temp_cell:usize){
+    fn clone_cell(&mut self, origin: usize, destination: usize, temp_cell: usize) {
         self.point(origin);
         self.start_loop();
         self.write_code("-");
@@ -229,34 +229,103 @@ impl BfContext {
         self.write_code("+");
         self.point(temp_cell);
         self.write_code("+");
-        let _=self.end_loop();
+        let _ = self.end_loop();
         self.point(temp_cell);
         self.start_loop();
         self.write_code("-");
         self.point(origin);
         self.write_code("+");
-        let _=self.end_loop();
+        let _ = self.end_loop();
     }
-    pub fn clone<T:Clone>(&mut self,var: &Variable<T>)->Variable<T>{
-        let cloned=self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
-        let temp_cell=self.reserve(1).start;
-        for offset in 0..var.pointer.offset{
-            self.clone_cell(var.pointer.start+offset, cloned.pointer.start+offset, temp_cell)
+    pub fn clone<T: Clone>(&mut self, var: &Variable<T>) -> Variable<T> {
+        let cloned = self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
+        let temp_cell = self.reserve(1).start;
+        for offset in 0..var.pointer.offset {
+            self.clone_cell(
+                var.pointer.start + offset,
+                cloned.pointer.start + offset,
+                temp_cell,
+            )
         }
         cloned
     }
-    pub fn free<T>(&mut self,var: Variable<T>){
+    pub fn free<T>(&mut self, var: Variable<T>) {
         self.clear_cells(&var);
-        self.taken=self.taken.iter().copied().filter(|range|range.start!=var.pointer.start).collect();
+        self.taken = self
+            .taken
+            .iter()
+            .copied()
+            .filter(|range| range.start != var.pointer.start)
+            .collect();
     }
-    pub fn free_optional<T>(&mut self,var: Variable<T>){
-        if self.must_free{
+    pub fn free_optional<T>(&mut self, var: Variable<T>) {
+        if self.must_free {
             self.free(var);
         }
     }
-
+    // algorithm for checking if first two cells are equal:
+    /*
+            ++>++<
+            [->-<]decrement cells until the first one is empty
+            >>>+<<< marker cell
+            + set empty first cell to not cell
+            >[<->>]
+            >[<]
+            <<
+            [>>>>>>>>>++++++++>]
+    */
+    pub fn do_if<T>(&mut self, condition: IfCondition<T>, code: impl Fn(&mut BfContext)) {
+        let comparison_space = self.declare_array(4);
+        let temp_cell = self.reserve(1);
+        let left_temp=comparison_space.pointer.start + 1;
+        let right_temp=comparison_space.pointer.start + 2;
+        let zero=comparison_space.pointer.start + 3;
+        let marker=comparison_space.pointer.start + 4;
+        self.clone_cell(
+            condition.left.pointer.start+1,
+            left_temp,
+            temp_cell.start,
+        );
+        self.clone_cell(
+            condition.right.pointer.start+1,
+            right_temp,
+            temp_cell.start,
+        );
+        match condition.comparsion_type {
+            ComparisonType::Equals => {
+                self.point(left_temp);
+                self.start_loop();
+                self.write_code("-");
+                self.point(right_temp);
+                self.write_code("-");
+                let _=self.end_loop();
+                self.point(marker);
+                self.write_code("+");
+                self.point(left_temp);
+                self.write_code("+");
+                self.point(right_temp);
+                self.write_code("[<->>]");
+                self.write_code(">[<]");
+                self.pointer=zero;
+                self.point(left_temp);
+                self.write_code("[");
+                self.write_code("-");
+                code(self);
+                self.point(left_temp);
+                self.write_code("]");
+            }
+        }
+        self.free_optional(comparison_space);
+    }
 }
-
+pub struct IfCondition<'a, T> {
+    left: &'a Variable<T>,
+    right: &'a Variable<T>,
+    comparsion_type: ComparisonType,
+}
+pub enum ComparisonType {
+    Equals,
+}
 struct BfFunction {}
 pub struct ByteRef<'a, T> {
     data_index: usize,
@@ -363,13 +432,19 @@ mod test {
     #[test]
     fn test_add() {
         let mut ctx = BfContext::default();
-        let mut counter=ctx.declare_byte();
-        ctx.point(counter.pointer.start+1);
-        ctx.write_code("++++");
-        ctx.start_loop();
-        ctx.write_code("-");
-        ctx.display_text("anl");
-        ctx.end_loop().unwrap();
+        let var1=ctx.declare_byte();
+        let var2=ctx.declare_byte();
+        ctx.point(var1.pointer.start+1);
+        ctx.write_code("++");
+        ctx.point(var2.pointer.start+1);
+        ctx.write_code("+++");
+        ctx.do_if(IfCondition{
+            left: &var1,
+            right: &var2,
+            comparsion_type: ComparisonType::Equals
+        }, |ctx: &mut BfContext|{
+            ctx.display_text("sus");
+        });
         println!("{}", ctx.code);
     }
 }
