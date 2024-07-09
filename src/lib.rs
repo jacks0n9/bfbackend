@@ -277,7 +277,7 @@ impl BfContext {
     pub fn do_if(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
         match condition.comparsion_type {
             ComparisonType::Equals => {
-                let comparison_space = self.declare_array(4);
+                let comparison_space: Variable<ArrayData> = self.declare_array(4);
                 let temp_cell = self.reserve(1);
                 let left_temp = comparison_space.pointer.start + 1;
                 let right_temp = comparison_space.pointer.start + 2;
@@ -313,7 +313,30 @@ impl BfContext {
             }
             ComparisonType::LeftGreaterThanRight => todo!(),
             ComparisonType::LeftLessThanRight => todo!(),
-            ComparisonType::NotEquals => todo!(),
+            ComparisonType::NotEquals =>{
+                let comparison_space: Variable<ArrayData> = self.declare_array(2);
+                let temp_cell = self.reserve(1);
+                let left_temp = comparison_space.pointer.start + 1;
+                let right_temp = comparison_space.pointer.start + 2;
+                self.clone_cell(condition.left.pointer.start + 1, left_temp, temp_cell.start);
+                self.clone_cell(
+                    condition.right.pointer.start + 1,
+                    right_temp,
+                    temp_cell.start,
+                );                
+                self.point(left_temp);
+                self.start_loop();
+                self.write_code("-");
+                self.point(right_temp);
+                self.write_code("-");
+                let _ = self.end_loop();
+                self.point(right_temp);
+                self.write_code("[[-]");
+                code(self);
+                self.point(right_temp);
+                self.write_code("]");
+                self.free_optional(comparison_space);
+            },
         }
     }
 }
@@ -444,7 +467,7 @@ mod test {
             IfCondition {
                 left: &var1,
                 right: &var2,
-                comparsion_type: ComparisonType::Equals,
+                comparsion_type: ComparisonType::NotEquals,
             },
             |ctx: &mut BfContext| {
                 ctx.display_text("sus");
