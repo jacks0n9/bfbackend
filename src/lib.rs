@@ -72,6 +72,7 @@ impl BfContext {
         if to_add == 0 {
             return;
         }
+        let before_add=self.clone();
         let root = (to_add.abs() as f64).sqrt();
         let rounded = root.round();
         byte_ref.mark_set();
@@ -98,6 +99,10 @@ impl BfContext {
             }
             .repeat(diff_from_needed);
             self.write_code(&extra);
+        }
+        if self.code.len()-before_add.code.len()>=to_add.abs_diff(0).into(){
+            *self=before_add;
+            self.write_code(&if to_add.is_positive() { "+" } else { "-" }.repeat(to_add.abs_diff(0) as usize))
         }
     }
     pub fn set_variable<'a, T: HasBeenSet + MarkSet + GetPointer + Into<ByteRef<'a, G>>, G: 'a>(
@@ -476,10 +481,7 @@ mod test {
     fn test_add() {
         let mut ctx = BfContext::default();
         let mut answer = ctx.declare_byte();
-        ctx.set_variable(0, answer.get_byte_ref());
-        ctx.do_if_nonzero(&answer, |ctx| {
-            ctx.display_text("when the imposter is sus");
-        });
+        ctx.add_to_var(50, answer.get_byte_ref());
         println!("{}", ctx.code);
     }
 }
