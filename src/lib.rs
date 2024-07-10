@@ -1,7 +1,5 @@
 mod interpreter;
 
-use std::io::{Read, Write};
-
 use thiserror::Error;
 #[derive(Default, Clone)]
 pub struct BfContext {
@@ -577,7 +575,7 @@ mod test {
     }
 
 struct BlankIO;
-impl Write for BlankIO {
+impl std::io::Write for BlankIO {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         Ok(buf.len())
     }
@@ -587,7 +585,7 @@ impl Write for BlankIO {
     }
 }
 
-impl Read for BlankIO {
+impl std::io::Read for BlankIO {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         Ok(0)
     }
