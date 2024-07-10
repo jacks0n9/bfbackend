@@ -538,6 +538,17 @@ mod test {
             test_add_value(i)
         }
     }
+    #[test]
+    fn test_print(){
+        let mut ctx = BfContext::default();
+        let test_str="The quick brown fox jumps over the lazy DOG1234567890";
+        ctx.display_text(test_str);
+        let mut writer:Vec<u8>=Vec::new();
+        let mut run=interpreter::BfInterpreter::new_with_code(ctx.code);
+        run.run(&mut writer,&mut BlankIO).unwrap();
+        assert_eq!(writer,test_str.as_bytes())
+
+    }
 }
 
 struct BlankIO;
