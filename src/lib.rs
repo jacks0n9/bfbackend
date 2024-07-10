@@ -102,14 +102,14 @@ impl BfContext {
     }
     pub fn set_variable<'a, T: HasBeenSet + MarkSet + GetPointer + Into<ByteRef<'a, G>>, G: 'a>(
         &mut self,
-        to_set: u8,
-        index: T,
+        value: u8,
+        byte_to_set: T,
     ) {
-        if index.has_been_set() {
-            self.point(index.get_pointer());
+        if byte_to_set.has_been_set() {
+            self.point(byte_to_set.get_pointer());
             self.write_code("[-]");
         }
-        self.add_to_var(to_set as i16, index)
+        self.add_to_var(value as i16, byte_to_set)
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
         let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
@@ -476,8 +476,10 @@ mod test {
     fn test_add() {
         let mut ctx = BfContext::default();
         let mut answer = ctx.declare_byte();
-        ctx.set_variable(5, answer.get_byte_ref());
-        ctx.do_if_nonzero(&answer, |ctx| {});
+        ctx.set_variable(0, answer.get_byte_ref());
+        ctx.do_if_nonzero(&answer, |ctx| {
+            ctx.display_text("when the imposter is sus");
+        });
         println!("{}", ctx.code);
     }
 }
