@@ -288,6 +288,14 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
+    fn move_cell(&mut self,origin:usize,destination: usize){
+        self.point(origin);
+        self.start_loop();
+        self.write_code("-");
+        self.point(destination);
+        self.write_code("+");
+        let _=self.end_loop();
+    }
     pub fn do_if_compare(&mut self, condition: IfCondition, code: impl FnOnce(&mut BfContext)) {
         match condition.comparsion_type {
             ComparisonType::Equals => {
