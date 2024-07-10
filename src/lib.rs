@@ -292,16 +292,15 @@ impl BfContext {
         match condition.comparsion_type {
             ComparisonType::Equals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(4);
-                let temp_cell = self.reserve(1);
                 let left_temp = comparison_space.pointer.start + 1;
                 let right_temp = comparison_space.pointer.start + 2;
                 let zero = comparison_space.pointer.start + 3;
                 let marker = comparison_space.pointer.start + 4;
-                self.clone_cell(condition.left.pointer.start + 1, left_temp, temp_cell.start);
+                self.clone_cell(condition.left.pointer.start + 1, left_temp, condition.left.pointer.start);
                 self.clone_cell(
                     condition.right.pointer.start + 1,
                     right_temp,
-                    temp_cell.start,
+                    condition.right.pointer.start,
                 );
                 self.point(left_temp);
                 self.start_loop();
