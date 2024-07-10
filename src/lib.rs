@@ -580,6 +580,19 @@ mod test {
         println!("{:?}", &run.cells[..20]);
         assert_eq!(value, run.cells[pointer])
     }
+    #[test]
+    fn test_move_cell(){
+        let mut ctx = BfContext::default();
+        let value=6;
+        let mut var1=ctx.declare_byte();
+        ctx.add_to_var(Signedu8::from(value), var1.get_byte_ref());
+        let var2=ctx.declare_byte();
+        ctx.move_cell(var1.pointer.start+1, var2.pointer.start+1);
+        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        run.run(&mut BlankIO, &mut BlankIO).unwrap();
+        assert_eq!(run.cells[var1.pointer.start+1],0);
+        assert_eq!(run.cells[var2.pointer.start+1],value);
+    }
 
 struct BlankIO;
 impl std::io::Write for BlankIO {
