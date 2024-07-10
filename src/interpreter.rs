@@ -44,10 +44,12 @@ impl BfInterpreter {
                 .get_mut(self.memory_pointer)
                 .ok_or(BfError::CellPointerOutOfRange)?;
             match instruction {
-                BfInstruction::Add => *current_cell += 1,
-                BfInstruction::Subtract => *current_cell -= 1,
+                BfInstruction::Add => *current_cell=current_cell.wrapping_add(1),
+                BfInstruction::Subtract => *current_cell=current_cell.wrapping_sub(1),
                 BfInstruction::PointRight => self.memory_pointer += 1,
-                BfInstruction::PointLeft => self.memory_pointer -= 1,
+                BfInstruction::PointLeft => {
+                    self.memory_pointer=self.memory_pointer.checked_sub(1).ok_or(BfError::CellPointerOutOfRange)?;
+                },
                 BfInstruction::StartLoop => loop_starts.push(self.code_pointer),
                 BfInstruction::EndLoop => {
                     if *current_cell==0{
