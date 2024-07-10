@@ -1,5 +1,5 @@
 use thiserror::Error;
-#[derive(Default,Clone)]
+#[derive(Default, Clone)]
 pub struct BfContext {
     taken: Vec<MemoryRange>,
     loops: Vec<Loop>,
@@ -72,7 +72,7 @@ impl BfContext {
         if to_add.value == 0 {
             return;
         }
-        let before_add=self.clone();
+        let before_add = self.clone();
         let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
         byte_ref.mark_set();
@@ -89,7 +89,7 @@ impl BfContext {
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
-        let to_add_signed: i16=to_add.into();
+        let to_add_signed: i16 = to_add.into();
         let diff_from_needed = rounded_squared.abs_diff(to_add_signed.into()) as usize;
         if diff_from_needed != 0 {
             self.point_add(as_byte_ref.data_index + 1);
@@ -101,8 +101,8 @@ impl BfContext {
             .repeat(diff_from_needed);
             self.write_code(&extra);
         }
-        if self.code.len()-before_add.code.len()>=to_add.value.into(){
-            *self=before_add;
+        if self.code.len() - before_add.code.len() >= to_add.value.into() {
+            *self = before_add;
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
@@ -115,7 +115,13 @@ impl BfContext {
             self.point(byte_to_set.get_pointer());
             self.write_code("[-]");
         }
-        self.add_to_var(Signedu8{negative:false,value}, byte_to_set)
+        self.add_to_var(
+            Signedu8 {
+                negative: false,
+                value,
+            },
+            byte_to_set,
+        )
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
         let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
@@ -475,31 +481,38 @@ impl MemoryRange {
     }
 }
 #[derive(Clone, Copy)]
-pub struct Signedu8{
-    pub negative:bool,
-    value: u8
+pub struct Signedu8 {
+    pub negative: bool,
+    value: u8,
 }
 
-impl Signedu8{
-    fn signum(&self)->i8{
-        if self.value==0{
-            return 0
+impl Signedu8 {
+    fn signum(&self) -> i8 {
+        if self.value == 0 {
+            return 0;
         }
-        if self.negative{
+        if self.negative {
             -1
-        }else{
+        } else {
             1
         }
     }
 }
-impl Into<i16> for Signedu8{
+impl Into<i16> for Signedu8 {
     fn into(self) -> i16 {
-        let sign:i16=self.signum().into();
-        let value:i16=self.value.into();
-        sign*value
+        let sign: i16 = self.signum().into();
+        let value: i16 = self.value.into();
+        sign * value
     }
 }
-
+impl From<u8> for Signedu8 {
+    fn from(value: u8) -> Self {
+        Signedu8 {
+            negative: false,
+            value,
+        }
+    }
+}
 #[cfg(test)]
 mod test {
     use super::*;
@@ -508,7 +521,13 @@ mod test {
         let mut ctx = BfContext::default();
         let mut answer = ctx.declare_byte();
         ctx.set_variable(128, answer.get_byte_ref());
-        ctx.add_to_var(Signedu8 { negative: true, value:65 }, answer.get_byte_ref());
+        ctx.add_to_var(
+            Signedu8 {
+                negative: true,
+                value: 65,
+            },
+            answer.get_byte_ref(),
+        );
         println!("{}", ctx.code);
     }
 }
