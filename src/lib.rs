@@ -1,3 +1,7 @@
+mod interpreter;
+
+use std::io::{Read, Write};
+
 use thiserror::Error;
 #[derive(Default, Clone)]
 pub struct BfContext {
@@ -72,11 +76,11 @@ impl BfContext {
         if to_add.value == 0 {
             return;
         }
+        byte_ref.mark_set();
+        let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
         let before_add = self.clone();
         let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
-        byte_ref.mark_set();
-        let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
         self.point(as_byte_ref.var.pointer.start);
         let inner_add = if !to_add.negative { "+" } else { "-" }.repeat(rounded as usize);
 
@@ -103,6 +107,7 @@ impl BfContext {
         }
         if self.code.len() - before_add.code.len() >= to_add.value.into() {
             *self = before_add;
+            self.point_add(1);
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
@@ -516,18 +521,38 @@ impl From<u8> for Signedu8 {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
-    fn test_add() {
+    fn test_add_value(value: u8) {
         let mut ctx = BfContext::default();
-        let mut answer = ctx.declare_byte();
-        ctx.set_variable(128, answer.get_byte_ref());
-        ctx.add_to_var(
-            Signedu8 {
-                negative: true,
-                value: 65,
-            },
-            answer.get_byte_ref(),
-        );
-        println!("{}", ctx.code);
+        let mut testing=ctx.declare_byte();
+        let byte_ref=testing.get_byte_ref();
+        let pointer=byte_ref.pointer;
+        ctx.add_to_var(Signedu8::from(value), byte_ref);
+        let code=ctx.code;
+        let mut run=interpreter::BfInterpreter::new_with_code(code);
+        run.run(&mut BlankIO,&mut BlankIO).unwrap();
+        assert_eq!(run.cells[pointer],value);
+    }
+    #[test]
+    fn test_add(){
+        for i in 0..=255{
+            test_add_value(i)
+        }
+    }
+}
+
+struct BlankIO;
+impl Write for BlankIO{
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        Ok(0)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Read for BlankIO{
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        Ok(0)
     }
 }
