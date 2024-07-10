@@ -66,19 +66,19 @@ impl BfContext {
     }
     pub fn add_to_var<'a, T: MarkSet + Into<ByteRef<'a, G>>, G: 'a>(
         &mut self,
-        to_add: i16,
+        to_add: Signedu8,
         mut byte_ref: T,
     ) {
-        if to_add == 0 {
+        if to_add.value == 0 {
             return;
         }
         let before_add=self.clone();
-        let root = (to_add.abs() as f64).sqrt();
+        let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
         byte_ref.mark_set();
         let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
         self.point(as_byte_ref.var.pointer.start);
-        let inner_add = if to_add.is_positive() { "+" } else { "-" }.repeat(rounded as usize);
+        let inner_add = if !to_add.negative { "+" } else { "-" }.repeat(rounded as usize);
 
         let square_loop = format!(
             "{}[-{}{}{}]",
@@ -89,10 +89,11 @@ impl BfContext {
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
-        let diff_from_needed = rounded_squared.abs_diff(to_add.into()) as usize;
+        let to_add_signed: i16=to_add.into();
+        let diff_from_needed = rounded_squared.abs_diff(to_add_signed.into()) as usize;
         if diff_from_needed != 0 {
             self.point_add(as_byte_ref.data_index + 1);
-            let extra = if (rounded_squared * to_add.signum() as i32) < to_add.into() {
+            let extra = if (rounded_squared * to_add.signum() as i32) < to_add_signed.into() {
                 "+"
             } else {
                 "-"
@@ -100,9 +101,9 @@ impl BfContext {
             .repeat(diff_from_needed);
             self.write_code(&extra);
         }
-        if self.code.len()-before_add.code.len()>=to_add.abs_diff(0).into(){
+        if self.code.len()-before_add.code.len()>=to_add.value.into(){
             *self=before_add;
-            self.write_code(&if to_add.is_positive() { "+" } else { "-" }.repeat(to_add.abs_diff(0) as usize))
+            self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
     pub fn set_variable<'a, T: HasBeenSet + MarkSet + GetPointer + Into<ByteRef<'a, G>>, G: 'a>(
@@ -114,7 +115,7 @@ impl BfContext {
             self.point(byte_to_set.get_pointer());
             self.write_code("[-]");
         }
-        self.add_to_var(value as i16, byte_to_set)
+        self.add_to_var(Signedu8{negative:false,value}, byte_to_set)
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
         let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
@@ -473,6 +474,31 @@ impl MemoryRange {
         self.start + self.offset
     }
 }
+#[derive(Clone, Copy)]
+pub struct Signedu8{
+    pub negative:bool,
+    value: u8
+}
+
+impl Signedu8{
+    fn signum(&self)->i8{
+        if self.value==0{
+            return 0
+        }
+        if self.negative{
+            -1
+        }else{
+            1
+        }
+    }
+}
+impl Into<i16> for Signedu8{
+    fn into(self) -> i16 {
+        let sign:i16=self.signum().into();
+        let value:i16=self.value.into();
+        sign*value
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -481,7 +507,8 @@ mod test {
     fn test_add() {
         let mut ctx = BfContext::default();
         let mut answer = ctx.declare_byte();
-        ctx.add_to_var(50, answer.get_byte_ref());
+        ctx.set_variable(128, answer.get_byte_ref());
+        ctx.add_to_var(Signedu8 { negative: true, value:65 }, answer.get_byte_ref());
         println!("{}", ctx.code);
     }
 }
