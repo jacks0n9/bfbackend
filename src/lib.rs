@@ -78,12 +78,11 @@ impl BfContext {
         }
         byte_ref.mark_set();
         let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
+        self.point(as_byte_ref.var.pointer.start);
         let before_add = self.clone();
         let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
-        self.point(as_byte_ref.var.pointer.start);
         let inner_add = if !to_add.negative { "+" } else { "-" }.repeat(rounded as usize);
-
         let square_loop = format!(
             "{}[-{}{}{}]",
             "+".repeat(rounded as usize),
@@ -291,7 +290,7 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
-    pub fn do_if_compare(&mut self, condition: IfCondition, code: impl Fn(&mut BfContext)) {
+    pub fn do_if_compare(&mut self, condition: IfCondition, code: impl FnOnce(&mut BfContext)) {
         match condition.comparsion_type {
             ComparisonType::Equals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(4);
@@ -523,38 +522,64 @@ mod test {
     use super::*;
     fn test_add_value(value: u8) {
         let mut ctx = BfContext::default();
-        let mut testing=ctx.declare_byte();
-        let byte_ref=testing.get_byte_ref();
-        let pointer=byte_ref.pointer;
+        let mut testing = ctx.declare_byte();
+        let byte_ref = testing.get_byte_ref();
+        let pointer = byte_ref.pointer;
         ctx.add_to_var(Signedu8::from(value), byte_ref);
-        let code=ctx.code;
-        let mut run=interpreter::BfInterpreter::new_with_code(code);
-        run.run(&mut BlankIO,&mut BlankIO).unwrap();
-        assert_eq!(run.cells[pointer],value);
+        let code = ctx.code;
+        let mut run = interpreter::BfInterpreter::new_with_code(code);
+        run.run(&mut BlankIO, &mut BlankIO).unwrap();
+        assert_eq!(run.cells[pointer], value);
     }
     #[test]
-    fn test_add(){
-        for i in 0..=255{
+    fn test_add() {
+        for i in 0..=255 {
             test_add_value(i)
         }
     }
     #[test]
-    fn test_print(){
+    fn test_print() {
         let mut ctx = BfContext::default();
-        let test_str="The quick brown fox jumps over the lazy DOG1234567890";
+        let test_str = "The quick brown fox jumps over the lazy DOG1234567890";
         ctx.display_text(test_str);
-        let mut writer:Vec<u8>=Vec::new();
-        let mut run=interpreter::BfInterpreter::new_with_code(ctx.code);
-        run.run(&mut writer,&mut BlankIO).unwrap();
-        assert_eq!(writer,test_str.as_bytes())
-
+        let mut writer: Vec<u8> = Vec::new();
+        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        run.run(&mut writer, &mut BlankIO).unwrap();
+        assert_eq!(writer, test_str.as_bytes())
     }
-}
+    #[test]
+    fn test_equals() {
+        let mut ctx = BfContext::default();
+        let value = 2;
+        let mut var1 = ctx.declare_byte();
+        ctx.set_variable(3, var1.get_byte_ref());
+        let mut var2 = ctx.declare_byte();
+        ctx.set_variable(3, var2.get_byte_ref());
+        let mut is_good = ctx.declare_byte();
+        let byte_ref = is_good.get_byte_ref();
+        let pointer = byte_ref.pointer;
+        ctx.do_if_compare(
+            IfCondition {
+                left: &var1,
+                right: &var2,
+                comparsion_type: ComparisonType::Equals,
+            },
+            |ctx| {
+                ctx.add_to_var(Signedu8::from(value), byte_ref);
+            },
+        );
+        println!("{}", &ctx.code);
+        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        run.run(&mut BlankIO, &mut BlankIO).unwrap();
+        println!("{pointer}");
+        println!("{:?}", &run.cells[..20]);
+        assert_eq!(value, run.cells[pointer])
+    }
 
 struct BlankIO;
-impl Write for BlankIO{
+impl Write for BlankIO {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Ok(0)
+        Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -562,8 +587,10 @@ impl Write for BlankIO{
     }
 }
 
-impl Read for BlankIO{
+impl Read for BlankIO {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         Ok(0)
     }
+}
+
 }
