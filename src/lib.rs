@@ -1,5 +1,5 @@
 use thiserror::Error;
-#[derive(Default)]
+#[derive(Default,Clone)]
 pub struct BfContext {
     taken: Vec<MemoryRange>,
     loops: Vec<Loop>,
