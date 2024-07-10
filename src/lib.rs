@@ -237,7 +237,7 @@ impl BfContext {
         self.write_code("+");
         let _ = self.end_loop();
     }
-    pub fn clone<T: Clone>(&mut self, var: &Variable<T>) -> Variable<T> {
+    pub fn clone_var<T: Clone>(&mut self, var: &Variable<T>) -> Variable<T> {
         let cloned = self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
         let temp_cell = self.reserve(1).start;
         for offset in 0..var.pointer.offset {
