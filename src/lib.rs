@@ -587,7 +587,7 @@ impl std::io::Write for BlankIO {
 
 impl std::io::Read for BlankIO {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        Ok(0)
+        Ok(buf.len())
     }
 }
 
