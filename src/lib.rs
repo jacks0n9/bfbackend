@@ -270,7 +270,7 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
-    fn move_cell(&mut self, origin: usize, destination: usize) {
+    pub fn move_cell(&mut self, origin: usize, destination: usize) {
         self.loop_over_cell(origin, |ctx| {
             ctx.write_code("-");
             ctx.point(destination);
