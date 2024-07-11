@@ -565,7 +565,7 @@ impl From<u8> for Signedu8 {
 #[cfg(test)]
 mod test {
     use super::*;
-    fn test_add_value(value: u8) {
+    fn add_value(value: u8) {
         let mut ctx = BfContext::default();
         let mut testing = ctx.declare_byte();
         let byte_ref = testing.get_byte_ref();
@@ -577,13 +577,13 @@ mod test {
         assert_eq!(run.cells[pointer], value);
     }
     #[test]
-    fn test_add() {
+    fn add() {
         for i in 0..=255 {
             test_add_value(i)
         }
     }
     #[test]
-    fn test_print() {
+    fn print() {
         let mut ctx = BfContext::default();
         let test_str = "The quick brown fox jumps over the lazy DOG1234567890";
         ctx.display_text(test_str);
@@ -593,7 +593,7 @@ mod test {
         assert_eq!(writer, test_str.as_bytes())
     }
     #[test]
-    fn test_equals() {
+    fn equals() {
         let mut ctx = BfContext::default();
         let value = 2;
         let mut var1 = ctx.declare_byte();
@@ -621,7 +621,7 @@ mod test {
         assert_eq!(value, run.cells[pointer])
     }
     #[test]
-    fn test_move_cell() {
+    fn move_cell() {
         let mut ctx = BfContext::default();
         let value = 6;
         let mut var1 = ctx.declare_byte();
@@ -634,7 +634,7 @@ mod test {
         assert_eq!(run.cells[var2.pointer.start + 1], value);
     }
     #[test]
-    fn test_left_greater_than_right() {
+    fn left_greater_than_right() {
         let test_values = [
             (5, 10),
             (6, 4),
