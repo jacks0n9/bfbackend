@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 mod interpreter;
 
 #[derive(Default, Clone)]
@@ -150,12 +152,12 @@ impl BfContext {
     }
     pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext)) {
         self.point(to_loop_over);
-        self.must_free+=1;
+        self.must_free += 1;
         self.write_code("[");
         code(self);
         self.point(to_loop_over);
         self.write_code("]");
-        self.must_free-=1;
+        self.must_free -= 1;
     }
     fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_location();
@@ -255,7 +257,7 @@ impl BfContext {
             .collect();
     }
     pub fn free_optional<T>(&mut self, var: Variable<T>) {
-        if self.must_free!=0 {
+        if self.must_free != 0 {
             self.free(var);
         }
     }
@@ -377,13 +379,26 @@ impl BfContext {
                 self.do_if_nonzero(&left_temp, code);
             }
             ComparisonType::LeftLessThanRight => {
-                let mut done=self.declare_byte();
+                let mut done = self.declare_byte();
                 self.set_variable(1, done.get_byte_ref());
-                self.do_if_compare(IfCondition{left: &condition.left,right: &condition.right,comparsion_type: ComparisonType::LeftGreaterThanRight}, |ctx|{
-                    ctx.add_to_var(Signedu8 { negative: true, value: 1 }, done.get_byte_ref());
-                });
+                self.do_if_compare(
+                    IfCondition {
+                        left: &condition.left,
+                        right: &condition.right,
+                        comparsion_type: ComparisonType::LeftGreaterThanRight,
+                    },
+                    |ctx| {
+                        ctx.add_to_var(
+                            Signedu8 {
+                                negative: true,
+                                value: 1,
+                            },
+                            done.get_byte_ref(),
+                        );
+                    },
+                );
                 self.do_if_nonzero(&done, code);
-            },
+            }
             ComparisonType::NotEquals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(2);
                 let temp_cell = self.reserve(1);
@@ -428,13 +443,31 @@ impl BfContext {
         self.write_code("[-]");
     }
     pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
-        let mut to_invert=self.declare_byte();
+        let mut to_invert = self.declare_byte();
         self.add_to_var(Signedu8::from(1), to_invert.get_byte_ref());
-        self.do_if_nonzero(var, |ctx|{
-            ctx.point(to_invert.pointer.start+1);
+        self.do_if_nonzero(var, |ctx| {
+            ctx.point(to_invert.pointer.start + 1);
             ctx.write_code("-");
         });
         self.do_if_nonzero(&to_invert, code);
+    }
+    pub fn match_num<T: FnOnce(&mut BfContext)>(
+        &mut self,
+        var: Variable<ByteData>,
+        cases: HashMap<u8, T>,
+    ) {
+        let mut var=var;
+        let mut sorted = cases
+            .into_iter()
+            .collect::<Vec<(u8, T)>>();
+        sorted.sort_by(|(num1, _), (num2, _)| num2.cmp(num1));
+        let mut subracted = 0;
+        for (num,code) in sorted{
+            let to_subtract=num-subracted;
+            self.add_to_var(Signedu8{negative:true,value: to_subtract}, var.get_byte_ref());
+            subracted+=num;
+            self.do_if_zero(&var, code);
+        }
     }
 }
 pub struct IfCondition<'a> {
@@ -659,8 +692,8 @@ mod test {
             (0, 0),
             (1, 0),
             (0, 1),
-            (3,255),
-            (255,3)
+            (3, 255),
+            (255, 3),
         ];
         let value = 39;
         for test_value in test_values {
@@ -694,32 +727,34 @@ mod test {
         }
     }
     #[test]
-    fn set_array(){
-        for i in 1..10_u8{
-            let mut ctx=BfContext::default();
-            let mut testing_array=ctx.declare_array(i.into());
-            let test_values:Vec<u8>=(1..=i).collect();
+    fn set_array() {
+        for i in 1..10_u8 {
+            let mut ctx = BfContext::default();
+            let mut testing_array = ctx.declare_array(i.into());
+            let test_values: Vec<u8> = (1..=i).collect();
             ctx.set_array(&test_values, &mut testing_array);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
-            assert_eq!(run.cells[testing_array.pointer.start+1..testing_array.pointer.start+1+i as usize],test_values);
+            assert_eq!(
+                run.cells
+                    [testing_array.pointer.start + 1..testing_array.pointer.start + 1 + i as usize],
+                test_values
+            );
         }
     }
     #[test]
-    fn do_if_zero(){
-        let mut ctx=BfContext::default();
-        let zero=ctx.declare_byte();
-        let mut should_be_set=ctx.declare_byte();
-        let value=92;
-        ctx.do_if_zero(&zero, |ctx|{
-            ctx.set_variable(value,should_be_set.get_byte_ref());
+    fn do_if_zero() {
+        let mut ctx = BfContext::default();
+        let zero = ctx.declare_byte();
+        let mut should_be_set = ctx.declare_byte();
+        let value = 92;
+        ctx.do_if_zero(&zero, |ctx| {
+            ctx.set_variable(value, should_be_set.get_byte_ref());
         });
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
-        assert_eq!(run.cells[should_be_set.pointer.start+1],value);
+        assert_eq!(run.cells[should_be_set.pointer.start + 1], value);
     }
-    
-
 
     struct BlankIO;
     impl std::io::Write for BlankIO {
