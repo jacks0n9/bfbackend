@@ -4,15 +4,11 @@ use thiserror::Error;
 #[derive(Default, Clone)]
 pub struct BfContext {
     taken: Vec<MemoryRange>,
-    loops: Vec<Loop>,
     pub code: String,
     pointer: usize,
     must_free: bool,
 }
-#[derive(Clone)]
-struct Loop {
-    original_pointer: usize,
-}
+
 #[derive(Error, Debug)]
 #[error("Unclosed brackets or tried to close brackets with no matching opening bracket")]
 pub struct MismatchedBracketsError;
@@ -132,14 +128,13 @@ impl BfContext {
         let remainders = values.iter().map(|num| num % average_sqrt);
         self.point(&*var);
         self.write_code(&"+".repeat(average_sqrt.into()));
-        self.start_loop();
-        self.write_code("-");
-        for factor in divided {
-            self.point_add(1);
-            self.write_code(&"+".repeat(factor.into()));
-        }
-        self.point(&*var);
-        let _ = self.end_loop();
+        self.loop_over_cell(var.pointer.start, |ctx| {
+            ctx.write_code("-");
+            for factor in divided {
+                ctx.point_add(1);
+                ctx.write_code(&"+".repeat(factor.into()));
+            }
+        });
         for remainder in remainders {
             self.point_add(1);
             self.write_code(&"+".repeat(remainder.into()));
@@ -158,21 +153,14 @@ impl BfContext {
     fn point_sub(&mut self, sub: usize) {
         self.point(self.pointer - sub)
     }
-    pub fn start_loop(&mut self) {
+    pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext)) {
+        self.point(to_loop_over);
+        self.must_free = true;
         self.write_code("[");
-        self.loops.push(Loop {
-            original_pointer: self.pointer,
-        });
-        self.must_free = true
-    }
-    pub fn end_loop(&mut self) -> Result<(), MismatchedBracketsError> {
-        let loop_we_are_closing = self.loops.pop().ok_or(MismatchedBracketsError)?;
-        self.point(loop_we_are_closing.original_pointer);
+        code(self);
+        self.point(to_loop_over);
         self.write_code("]");
-        if self.loops.is_empty() {
-            self.must_free = false;
-        }
-        Ok(())
+        self.must_free = false;
     }
     fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_location();
@@ -236,20 +224,19 @@ impl BfContext {
         self.pointer = store_to.pointer.end() + 1
     }
     fn clone_cell(&mut self, origin: usize, destination: usize, temp_cell: usize) {
-        self.point(origin);
-        self.start_loop();
-        self.write_code("-");
-        self.point(destination);
-        self.write_code("+");
+        self.loop_over_cell(origin, |ctx| {
+            ctx.write_code("-");
+            ctx.point(destination);
+            ctx.write_code("+");
+            ctx.point(temp_cell);
+            ctx.write_code("+");
+        });
         self.point(temp_cell);
-        self.write_code("+");
-        let _ = self.end_loop();
-        self.point(temp_cell);
-        self.start_loop();
-        self.write_code("-");
-        self.point(origin);
-        self.write_code("+");
-        let _ = self.end_loop();
+        self.loop_over_cell(temp_cell, |ctx| {
+            ctx.write_code("-");
+            ctx.point(origin);
+            ctx.write_code("+");
+        });
     }
     pub fn clone_var<T: Clone>(&mut self, var: &Variable<T>) -> Variable<T> {
         let cloned = self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
@@ -288,13 +275,12 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
-    fn move_cell(&mut self,origin:usize,destination: usize){
-        self.point(origin);
-        self.start_loop();
-        self.write_code("-");
-        self.point(destination);
-        self.write_code("+");
-        let _=self.end_loop();
+    fn move_cell(&mut self, origin: usize, destination: usize) {
+        self.loop_over_cell(origin, |ctx| {
+            ctx.write_code("-");
+            ctx.point(destination);
+            ctx.write_code("+");
+        });
     }
     pub fn do_if_compare(&mut self, condition: IfCondition, code: impl FnOnce(&mut BfContext)) {
         match condition.comparsion_type {
@@ -304,18 +290,22 @@ impl BfContext {
                 let right_temp = comparison_space.pointer.start + 2;
                 let zero = comparison_space.pointer.start + 3;
                 let marker = comparison_space.pointer.start + 4;
-                self.clone_cell(condition.left.pointer.start + 1, left_temp, condition.left.pointer.start);
+                self.clone_cell(
+                    condition.left.pointer.start + 1,
+                    left_temp,
+                    condition.left.pointer.start,
+                );
                 self.clone_cell(
                     condition.right.pointer.start + 1,
                     right_temp,
                     condition.right.pointer.start,
                 );
                 self.point(left_temp);
-                self.start_loop();
-                self.write_code("-");
-                self.point(right_temp);
-                self.write_code("-");
-                let _ = self.end_loop();
+                self.loop_over_cell(left_temp, |ctx| {
+                    ctx.write_code("-");
+                    ctx.point(right_temp);
+                    ctx.write_code("-");
+                });
                 self.point(marker);
                 self.write_code("+");
                 self.point(left_temp);
@@ -332,36 +322,65 @@ impl BfContext {
                 self.write_code("]");
                 self.free_optional(comparison_space);
             }
-            ComparisonType::LeftGreaterThanRight => { 
-                let mut right_temp=self.declare_byte();
-                let mut left_temp=self.declare_byte();
-                self.clone_cell(condition.right.pointer.start+1, right_temp.pointer.start+1, condition.right.pointer.start);
+            ComparisonType::LeftGreaterThanRight => {
+                let mut right_temp = self.declare_byte();
+                let mut left_temp = self.declare_byte();
+                self.clone_cell(
+                    condition.right.pointer.start + 1,
+                    right_temp.pointer.start + 1,
+                    condition.right.pointer.start,
+                );
                 self.add_to_var(Signedu8::from(1), right_temp.get_byte_ref());
-                self.clone_cell(condition.left.pointer.start+1, left_temp.pointer.start+1, condition.left.pointer.start);
+                self.clone_cell(
+                    condition.left.pointer.start + 1,
+                    left_temp.pointer.start + 1,
+                    condition.left.pointer.start,
+                );
                 self.add_to_var(Signedu8::from(1), left_temp.get_byte_ref());
-                let mut is_empty=self.declare_byte();
-                let mut is_not_empty=self.declare_byte();
+                let mut is_empty = self.declare_byte();
+                let mut is_not_empty = self.declare_byte();
                 self.set_variable(1, is_not_empty.get_byte_ref());
                 self.set_variable(2, is_empty.get_byte_ref());
-                self.point(is_not_empty.pointer.start+1);
-                self.start_loop();
-                self.add_to_var(Signedu8{negative: true,value:1}, left_temp.get_byte_ref());
-                self.do_if_nonzero(&left_temp, |ctx|{
-                    ctx.add_to_var(Signedu8{negative: true,value:1}, is_empty.get_byte_ref());
+                self.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
+                    ctx.add_to_var(
+                        Signedu8 {
+                            negative: true,
+                            value: 1,
+                        },
+                        left_temp.get_byte_ref(),
+                    );
+                    ctx.do_if_nonzero(&left_temp, |ctx| {
+                        ctx.add_to_var(
+                            Signedu8 {
+                                negative: true,
+                                value: 1,
+                            },
+                            is_empty.get_byte_ref(),
+                        );
+                    });
+                    ctx.add_to_var(
+                        Signedu8 {
+                            negative: true,
+                            value: 1,
+                        },
+                        right_temp.get_byte_ref(),
+                    );
+                    ctx.do_if_nonzero(&right_temp, |ctx| {
+                        ctx.add_to_var(
+                            Signedu8 {
+                                negative: true,
+                                value: 1,
+                            },
+                            is_empty.get_byte_ref(),
+                        );
+                    });
+                    ctx.do_if_nonzero(&is_empty, |ctx| {
+                        ctx.set_variable(0, is_not_empty.get_byte_ref());
+                    });
+                    ctx.set_variable(2, is_empty.get_byte_ref());
                 });
-                self.add_to_var(Signedu8{negative: true,value:1}, right_temp.get_byte_ref());
-                self.do_if_nonzero(&right_temp, |ctx|{
-                    ctx.add_to_var(Signedu8{negative: true,value:1}, is_empty.get_byte_ref());
-                });
-                self.do_if_nonzero(&is_empty, |ctx|{
-                    ctx.set_variable(0, is_not_empty.get_byte_ref());
-                });
-                self.set_variable(2, is_empty.get_byte_ref());
-                let _=self.end_loop();
                 self.do_if_nonzero(&left_temp, code);
-
-
-            },
+            }
             ComparisonType::LeftLessThanRight => todo!(),
             ComparisonType::NotEquals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(2);
@@ -374,12 +393,11 @@ impl BfContext {
                     right_temp,
                     temp_cell.start,
                 );
-                self.point(left_temp);
-                self.start_loop();
-                self.write_code("-");
-                self.point(right_temp);
-                self.write_code("-");
-                let _ = self.end_loop();
+                self.loop_over_cell(left_temp, |ctx| {
+                    ctx.write_code("-");
+                    ctx.point(right_temp);
+                    ctx.write_code("-");
+                });
                 self.point(right_temp);
                 self.write_code("[[-]");
                 code(self);
@@ -610,62 +628,75 @@ mod test {
         assert_eq!(value, run.cells[pointer])
     }
     #[test]
-    fn test_move_cell(){
+    fn test_move_cell() {
         let mut ctx = BfContext::default();
-        let value=6;
-        let mut var1=ctx.declare_byte();
+        let value = 6;
+        let mut var1 = ctx.declare_byte();
         ctx.add_to_var(Signedu8::from(value), var1.get_byte_ref());
-        let var2=ctx.declare_byte();
-        ctx.move_cell(var1.pointer.start+1, var2.pointer.start+1);
+        let var2 = ctx.declare_byte();
+        ctx.move_cell(var1.pointer.start + 1, var2.pointer.start + 1);
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
-        assert_eq!(run.cells[var1.pointer.start+1],0);
-        assert_eq!(run.cells[var2.pointer.start+1],value);
+        assert_eq!(run.cells[var1.pointer.start + 1], 0);
+        assert_eq!(run.cells[var2.pointer.start + 1], value);
     }
     #[test]
-    fn test_left_greater_than_right(){
-        let test_values=[(5,10),(6,4),(10,10),(255,255),(0,0),(1,0),(0,1)];
-        let value=39;
-        for test_value in test_values{
+    fn test_left_greater_than_right() {
+        let test_values = [
+            (5, 10),
+            (6, 4),
+            (10, 10),
+            (255, 255),
+            (0, 0),
+            (1, 0),
+            (0, 1),
+        ];
+        let value = 39;
+        for test_value in test_values {
             let mut ctx = BfContext::default();
-            let mut left=ctx.declare_byte();
+            let mut left = ctx.declare_byte();
             ctx.set_variable(test_value.0, left.get_byte_ref());
-            let mut right=ctx.declare_byte();
+            let mut right = ctx.declare_byte();
             ctx.set_variable(test_value.1, right.get_byte_ref());
-            let mut should_be_set=ctx.declare_byte();
-            ctx.do_if_compare(IfCondition{left:&left,right:&right,comparsion_type: ComparisonType::LeftGreaterThanRight},|ctx|{
-                ctx.set_variable(value,should_be_set.get_byte_ref());
-            });
-            println!("{}",&ctx.code);
+            let mut should_be_set = ctx.declare_byte();
+            ctx.do_if_compare(
+                IfCondition {
+                    left: &left,
+                    right: &right,
+                    comparsion_type: ComparisonType::LeftGreaterThanRight,
+                },
+                |ctx| {
+                    ctx.set_variable(value, should_be_set.get_byte_ref());
+                },
+            );
+            println!("{}", &ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
-            let what_cell_was_set_to=run.cells[should_be_set.pointer.start+1];
-            println!("test value: {},{}",test_value.0,test_value.1);
-            if test_value.0>test_value.1{
-                assert_eq!(what_cell_was_set_to,value)
-            }else {
+            let what_cell_was_set_to = run.cells[should_be_set.pointer.start + 1];
+            println!("test value: {},{}", test_value.0, test_value.1);
+            if test_value.0 > test_value.1 {
+                assert_eq!(what_cell_was_set_to, value)
+            } else {
                 println!("for zero");
-                assert_eq!(what_cell_was_set_to,0)
+                assert_eq!(what_cell_was_set_to, 0)
             }
         }
-
     }
 
-struct BlankIO;
-impl std::io::Write for BlankIO {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        Ok(buf.len())
+    struct BlankIO;
+    impl std::io::Write for BlankIO {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
+    impl std::io::Read for BlankIO {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
     }
-}
-
-impl std::io::Read for BlankIO {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        Ok(buf.len())
-    }
-}
-
 }
