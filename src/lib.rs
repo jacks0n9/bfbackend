@@ -643,6 +643,8 @@ mod test {
             (0, 0),
             (1, 0),
             (0, 1),
+            (3,255),
+            (255,3)
         ];
         let value = 39;
         for test_value in test_values {
