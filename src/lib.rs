@@ -36,7 +36,6 @@ impl BfContext {
     pub fn declare_and_reserve<T>(&mut self, size: usize, data: T) -> Variable<T> {
         let our_range = self.reserve(size);
         Variable {
-            dynamic: false,
             var_data: data,
             pointer: our_range,
         }
@@ -433,7 +432,6 @@ pub enum ComparisonType {
     LeftGreaterThanRight,
     LeftLessThanRight,
 }
-struct BfFunction {}
 pub struct ByteRef<'a, T> {
     data_index: usize,
     pointer: usize,
@@ -475,7 +473,6 @@ impl MarkSet for ByteRef<'_, ArrayData> {
 }
 #[derive(Clone)]
 pub struct Variable<T> {
-    dynamic: bool,
     var_data: T,
     pointer: MemoryRange,
 }
