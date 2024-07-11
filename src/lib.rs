@@ -1,6 +1,5 @@
 mod interpreter;
 
-use thiserror::Error;
 #[derive(Default, Clone)]
 pub struct BfContext {
     taken: Vec<MemoryRange>,
@@ -9,9 +8,6 @@ pub struct BfContext {
     must_free: bool,
 }
 
-#[derive(Error, Debug)]
-#[error("Unclosed brackets or tried to close brackets with no matching opening bracket")]
-pub struct MismatchedBracketsError;
 impl BfContext {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
         let mut previous_end = 0;
