@@ -579,7 +579,7 @@ mod test {
     #[test]
     fn add() {
         for i in 0..=255 {
-            test_add_value(i)
+            add_value(i)
         }
     }
     #[test]
@@ -674,6 +674,19 @@ mod test {
                 assert_eq!(what_cell_was_set_to, 0)
             }
         }
+    }
+    #[test]
+    fn set_array(){
+        for i in 1..10_u8{
+            let mut ctx=BfContext::default();
+            let mut testing_array=ctx.declare_array(i.into());
+            let test_values:Vec<u8>=(1..=i).collect();
+            ctx.set_array(&test_values, &mut testing_array);
+            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            run.run(&mut BlankIO, &mut BlankIO).unwrap();
+            assert_eq!(run.cells[testing_array.pointer.start+1..testing_array.pointer.start+1+i as usize],test_values);
+        }
+        
     }
 
     struct BlankIO;
