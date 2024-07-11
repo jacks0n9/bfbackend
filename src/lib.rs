@@ -332,7 +332,36 @@ impl BfContext {
                 self.write_code("]");
                 self.free_optional(comparison_space);
             }
-            ComparisonType::LeftGreaterThanRight => todo!(),
+            ComparisonType::LeftGreaterThanRight => { 
+                let mut right_temp=self.declare_byte();
+                let mut left_temp=self.declare_byte();
+                self.clone_cell(condition.right.pointer.start+1, right_temp.pointer.start+1, condition.right.pointer.start);
+                self.add_to_var(Signedu8::from(1), right_temp.get_byte_ref());
+                self.clone_cell(condition.left.pointer.start+1, left_temp.pointer.start+1, condition.left.pointer.start);
+                self.add_to_var(Signedu8::from(1), left_temp.get_byte_ref());
+                let mut is_empty=self.declare_byte();
+                let mut is_not_empty=self.declare_byte();
+                self.set_variable(1, is_not_empty.get_byte_ref());
+                self.set_variable(2, is_empty.get_byte_ref());
+                self.point(is_not_empty.pointer.start+1);
+                self.start_loop();
+                self.add_to_var(Signedu8{negative: true,value:1}, left_temp.get_byte_ref());
+                self.do_if_nonzero(&left_temp, |ctx|{
+                    ctx.add_to_var(Signedu8{negative: true,value:1}, is_empty.get_byte_ref());
+                });
+                self.add_to_var(Signedu8{negative: true,value:1}, right_temp.get_byte_ref());
+                self.do_if_nonzero(&right_temp, |ctx|{
+                    ctx.add_to_var(Signedu8{negative: true,value:1}, is_empty.get_byte_ref());
+                });
+                self.do_if_nonzero(&is_empty, |ctx|{
+                    ctx.set_variable(0, is_not_empty.get_byte_ref());
+                });
+                self.set_variable(2, is_empty.get_byte_ref());
+                let _=self.end_loop();
+                self.do_if_nonzero(&left_temp, code);
+
+
+            },
             ComparisonType::LeftLessThanRight => todo!(),
             ComparisonType::NotEquals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(2);
@@ -360,7 +389,7 @@ impl BfContext {
             }
         }
     }
-    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl Fn(&mut BfContext)) {
+    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
         let zero_cell = self.declare_byte();
         self.point(var.pointer.start);
         self.write_code("+");
@@ -592,6 +621,34 @@ mod test {
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         assert_eq!(run.cells[var1.pointer.start+1],0);
         assert_eq!(run.cells[var2.pointer.start+1],value);
+    }
+    #[test]
+    fn test_left_greater_than_right(){
+        let test_values=[(5,10),(6,4),(10,10),(255,255),(0,0),(1,0),(0,1)];
+        let value=39;
+        for test_value in test_values{
+            let mut ctx = BfContext::default();
+            let mut left=ctx.declare_byte();
+            ctx.set_variable(test_value.0, left.get_byte_ref());
+            let mut right=ctx.declare_byte();
+            ctx.set_variable(test_value.1, right.get_byte_ref());
+            let mut should_be_set=ctx.declare_byte();
+            ctx.do_if_compare(IfCondition{left:&left,right:&right,comparsion_type: ComparisonType::LeftGreaterThanRight},|ctx|{
+                ctx.set_variable(value,should_be_set.get_byte_ref());
+            });
+            println!("{}",&ctx.code);
+            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            run.run(&mut BlankIO, &mut BlankIO).unwrap();
+            let what_cell_was_set_to=run.cells[should_be_set.pointer.start+1];
+            println!("test value: {},{}",test_value.0,test_value.1);
+            if test_value.0>test_value.1{
+                assert_eq!(what_cell_was_set_to,value)
+            }else {
+                println!("for zero");
+                assert_eq!(what_cell_was_set_to,0)
+            }
+        }
+
     }
 
 struct BlankIO;
