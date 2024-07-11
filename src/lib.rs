@@ -280,6 +280,65 @@ impl BfContext {
         });
     }
     pub fn do_if_compare(&mut self, condition: IfCondition, code: impl FnOnce(&mut BfContext)) {
+        fn do_if_left_greater_than_right(ctx: &mut BfContext,left: &Variable<ByteData>,right: &Variable<ByteData>,code: impl FnOnce(&mut BfContext)){
+            let mut right_temp = ctx.declare_byte();
+                let mut left_temp =ctx.declare_byte();
+                ctx.clone_cell(
+                    right.pointer.start + 1,
+                    right_temp.pointer.start + 1,
+                    right.pointer.start,
+                );
+                ctx.add_to_var(Signedu8::from(1), right_temp.get_byte_ref());
+                ctx.clone_cell(
+                    left.pointer.start + 1,
+                    left_temp.pointer.start + 1,
+                    left.pointer.start,
+                );
+                ctx.add_to_var(Signedu8::from(1), left_temp.get_byte_ref());
+                let mut is_empty = ctx.declare_byte();
+                let mut is_not_empty = ctx.declare_byte();
+                ctx.set_variable(1, is_not_empty.get_byte_ref());
+                ctx.set_variable(2, is_empty.get_byte_ref());
+                ctx.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
+                    ctx.add_to_var(
+                        Signedu8 {
+                            negative: true,
+                            value: 1,
+                        },
+                        left_temp.get_byte_ref(),
+                    );
+                    ctx.do_if_nonzero(&left_temp, |ctx| {
+                        ctx.add_to_var(
+                            Signedu8 {
+                                negative: true,
+                                value: 1,
+                            },
+                            is_empty.get_byte_ref(),
+                        );
+                    });
+                    ctx.add_to_var(
+                        Signedu8 {
+                            negative: true,
+                            value: 1,
+                        },
+                        right_temp.get_byte_ref(),
+                    );
+                    ctx.do_if_nonzero(&right_temp, |ctx| {
+                        ctx.add_to_var(
+                            Signedu8 {
+                                negative: true,
+                                value: 1,
+                            },
+                            is_empty.get_byte_ref(),
+                        );
+                    });
+                    ctx.do_if_nonzero(&is_empty, |ctx| {
+                        ctx.set_variable(0, is_not_empty.get_byte_ref());
+                    });
+                    ctx.set_variable(2, is_empty.get_byte_ref());
+                });
+                ctx.do_if_nonzero(&left_temp, code);
+        }
         match condition.comparsion_type {
             ComparisonType::Equals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(4);
@@ -320,83 +379,20 @@ impl BfContext {
                 self.free_optional(comparison_space);
             }
             ComparisonType::LeftGreaterThanRight => {
-                let mut right_temp = self.declare_byte();
-                let mut left_temp = self.declare_byte();
-                self.clone_cell(
-                    condition.right.pointer.start + 1,
-                    right_temp.pointer.start + 1,
-                    condition.right.pointer.start,
-                );
-                self.add_to_var(Signedu8::from(1), right_temp.get_byte_ref());
-                self.clone_cell(
-                    condition.left.pointer.start + 1,
-                    left_temp.pointer.start + 1,
-                    condition.left.pointer.start,
-                );
-                self.add_to_var(Signedu8::from(1), left_temp.get_byte_ref());
-                let mut is_empty = self.declare_byte();
-                let mut is_not_empty = self.declare_byte();
-                self.set_variable(1, is_not_empty.get_byte_ref());
-                self.set_variable(2, is_empty.get_byte_ref());
-                self.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
-                    ctx.add_to_var(
-                        Signedu8 {
-                            negative: true,
-                            value: 1,
-                        },
-                        left_temp.get_byte_ref(),
-                    );
-                    ctx.do_if_nonzero(&left_temp, |ctx| {
-                        ctx.add_to_var(
-                            Signedu8 {
-                                negative: true,
-                                value: 1,
-                            },
-                            is_empty.get_byte_ref(),
-                        );
-                    });
-                    ctx.add_to_var(
-                        Signedu8 {
-                            negative: true,
-                            value: 1,
-                        },
-                        right_temp.get_byte_ref(),
-                    );
-                    ctx.do_if_nonzero(&right_temp, |ctx| {
-                        ctx.add_to_var(
-                            Signedu8 {
-                                negative: true,
-                                value: 1,
-                            },
-                            is_empty.get_byte_ref(),
-                        );
-                    });
-                    ctx.do_if_nonzero(&is_empty, |ctx| {
-                        ctx.set_variable(0, is_not_empty.get_byte_ref());
-                    });
-                    ctx.set_variable(2, is_empty.get_byte_ref());
-                });
-                self.do_if_nonzero(&left_temp, code);
+                do_if_left_greater_than_right(self, condition.left, condition.right, code)
             }
             ComparisonType::LeftLessThanRight => {
                 let mut done = self.declare_byte();
                 self.set_variable(1, done.get_byte_ref());
-                self.do_if_compare(
-                    IfCondition {
-                        left: &condition.left,
-                        right: &condition.right,
-                        comparsion_type: ComparisonType::LeftGreaterThanRight,
-                    },
-                    |ctx| {
-                        ctx.add_to_var(
-                            Signedu8 {
-                                negative: true,
-                                value: 1,
-                            },
-                            done.get_byte_ref(),
-                        );
-                    },
-                );
+                do_if_left_greater_than_right(self, condition.left, condition.right, |ctx| {
+                    ctx.add_to_var(
+                        Signedu8 {
+                            negative: true,
+                            value: 1,
+                        },
+                        done.get_byte_ref(),
+                    );
+                });
                 self.do_if_nonzero(&done, code);
             }
             ComparisonType::NotEquals => {
