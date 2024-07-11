@@ -5,7 +5,7 @@ pub struct BfContext {
     taken: Vec<MemoryRange>,
     pub code: String,
     pointer: usize,
-    must_free: bool,
+    must_free: usize,
 }
 
 impl BfContext {
@@ -150,12 +150,12 @@ impl BfContext {
     }
     pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext)) {
         self.point(to_loop_over);
-        self.must_free = true;
+        self.must_free+=1;
         self.write_code("[");
         code(self);
         self.point(to_loop_over);
         self.write_code("]");
-        self.must_free = false;
+        self.must_free-=1;
     }
     fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_location();
@@ -255,7 +255,7 @@ impl BfContext {
             .collect();
     }
     pub fn free_optional<T>(&mut self, var: Variable<T>) {
-        if self.must_free {
+        if self.must_free!=0 {
             self.free(var);
         }
     }
