@@ -376,7 +376,14 @@ impl BfContext {
                 });
                 self.do_if_nonzero(&left_temp, code);
             }
-            ComparisonType::LeftLessThanRight => todo!(),
+            ComparisonType::LeftLessThanRight => {
+                let mut done=self.declare_byte();
+                self.set_variable(1, done.get_byte_ref());
+                self.do_if_compare(IfCondition{left: &condition.left,right: &condition.right,comparsion_type: ComparisonType::LeftGreaterThanRight}, |ctx|{
+                    ctx.add_to_var(Signedu8 { negative: true, value: 1 }, done.get_byte_ref());
+                });
+                self.do_if_nonzero(&done, code);
+            },
             ComparisonType::NotEquals => {
                 let comparison_space: Variable<ArrayData> = self.declare_array(2);
                 let temp_cell = self.reserve(1);
