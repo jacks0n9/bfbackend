@@ -420,6 +420,15 @@ impl BfContext {
         self.point(var.pointer.start);
         self.write_code("[-]");
     }
+    pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
+        let mut to_invert=self.declare_byte();
+        self.add_to_var(Signedu8::from(1), to_invert.get_byte_ref());
+        self.do_if_nonzero(var, |ctx|{
+            ctx.point(to_invert.pointer.start+1);
+            ctx.write_code("-");
+        });
+        self.do_if_nonzero(&to_invert, code);
+    }
 }
 pub struct IfCondition<'a> {
     left: &'a Variable<ByteData>,
@@ -688,8 +697,22 @@ mod test {
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(run.cells[testing_array.pointer.start+1..testing_array.pointer.start+1+i as usize],test_values);
         }
-        
     }
+    #[test]
+    fn do_if_zero(){
+        let mut ctx=BfContext::default();
+        let zero=ctx.declare_byte();
+        let mut should_be_set=ctx.declare_byte();
+        let value=92;
+        ctx.do_if_zero(&zero, |ctx|{
+            ctx.set_variable(value,should_be_set.get_byte_ref());
+        });
+        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        run.run(&mut BlankIO, &mut BlankIO).unwrap();
+        assert_eq!(run.cells[should_be_set.pointer.start+1],value);
+    }
+    
+
 
     struct BlankIO;
     impl std::io::Write for BlankIO {
