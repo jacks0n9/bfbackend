@@ -446,7 +446,7 @@ impl BfContext {
         });
         self.do_if_nonzero(&to_invert, code);
     }
-    pub fn match_num<'a>(&'a mut self,var: Variable<ByteData>)->MatchBuilder<'a>{
+    pub fn match_num(&mut self,var: Variable<ByteData>)->MatchBuilder<'_>{
         self.point(var.pointer.start);
         MatchBuilder{
             ctx: self,
@@ -465,7 +465,7 @@ impl<'a> MatchBuilder<'a>{
         let old=self.ctx.code.clone();
         self.ctx.do_if_zero(&self.var, to_do);
         let chars_added=self.ctx.code.len()-old.len();
-        let diff=(&self.ctx.code[self.ctx.code.len()-chars_added..]).to_owned();
+        let diff=self.ctx.code[self.ctx.code.len()-chars_added..].to_owned();
         self.ctx.code=old;
         self.ctx.pointer=self.var.pointer.start;
         self.codes.insert(num, diff);
@@ -613,10 +613,10 @@ impl Signedu8 {
         }
     }
 }
-impl Into<i16> for Signedu8 {
-    fn into(self) -> i16 {
-        let sign: i16 = self.signum().into();
-        let value: i16 = self.value.into();
+impl From<Signedu8> for i16 {
+    fn from(val: Signedu8) -> Self {
+        let sign: i16 = val.signum().into();
+        let value: i16 = val.value.into();
         sign * value
     }
 }
