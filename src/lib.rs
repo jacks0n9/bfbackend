@@ -447,22 +447,44 @@ impl BfContext {
         });
         self.do_if_nonzero(&to_invert, code);
     }
-    pub fn match_num<T: FnOnce(&mut BfContext)>(
-        &mut self,
-        var: Variable<ByteData>,
-        cases: HashMap<u8, T>,
-    ) {
-        let mut var=var;
-        let mut sorted = cases
+    //TODO: Make it so cases can have numbers above 255
+    pub fn match_num<'a>(&'a mut self,var: Variable<ByteData>)->MatchBuilder<'a>{
+        self.point(var.pointer.start);
+        MatchBuilder{
+            ctx: self,
+            var,
+            codes: HashMap::new()
+        }
+    }
+}
+pub struct MatchBuilder<'a>{
+    ctx: &'a mut BfContext,
+    var: Variable<ByteData>,
+    codes: HashMap<u8,String>
+}
+impl<'a> MatchBuilder<'a>{
+    pub fn case(mut self,num: u8,to_do: impl FnOnce(&mut BfContext))->Self{
+        let old=self.ctx.code.clone();
+        self.ctx.do_if_zero(&self.var, to_do);
+        let chars_added=self.ctx.code.len()-old.len();
+        let diff=(&self.ctx.code[self.ctx.code.len()-chars_added..]).to_owned();
+        self.ctx.code=old;
+        self.ctx.pointer=self.var.pointer.start;
+        self.codes.insert(num, diff);
+        self
+    }
+    pub fn build(mut self){
+        let mut sorted = self.codes
             .into_iter()
-            .collect::<Vec<(u8, T)>>();
+            .collect::<Vec<(u8, String)>>();
         sorted.sort_by(|(num1, _), (num2, _)| num2.cmp(num1));
-        let mut subracted = 0;
+        let mut subtracted = 0;
         for (num,code) in sorted{
-            let to_subtract=num-subracted;
-            self.add_to_var(Signedu8{negative:true,value: to_subtract}, var.get_byte_ref());
-            subracted+=num;
-            self.do_if_zero(&var, code);
+            let to_subtract=num.abs_diff(subtracted);
+            self.ctx.add_to_var(Signedu8{negative:true,value: to_subtract}, self.var.get_byte_ref());
+            self.ctx.point(self.var.pointer.start);
+            self.ctx.write_code(&code);
+            subtracted=num;
         }
     }
 }
@@ -740,7 +762,7 @@ mod test {
     }
     #[test]
     fn do_if_zero() {
-        let mut ctx = BfContext::default();
+        let mut ctx: BfContext = BfContext::default();
         let zero = ctx.declare_byte();
         let mut should_be_set = ctx.declare_byte();
         let value = 92;
@@ -750,6 +772,34 @@ mod test {
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         assert_eq!(run.cells[should_be_set.pointer.start + 1], value);
+    }
+    #[test]
+    fn match_num(){
+        let to_set_to=123;
+        let test_values: &[(&[u8], usize)]=&[(&[3,4,1,5,6,240],5),(&[30],0),(&[0],0),(&[5],0)];
+        for test_value in test_values{
+            let mut ctx: BfContext = BfContext::default();
+            let mut to_set=ctx.declare_byte();
+            let correct=test_value.0[test_value.1];
+            ctx.set_variable(correct, to_set.get_byte_ref());
+            let mut should_set=ctx.declare_byte();
+            let mut matching=ctx.match_num(to_set);
+            for num in test_value.0{
+                if *num==correct{
+                    matching=matching.case(*num, |ctx|{
+                        ctx.add_to_var(to_set_to.into(), should_set.get_byte_ref());
+                    });
+                }else{
+                    matching=matching.case(*num, |_ctx|{});
+                }
+            }
+            matching.build();
+            println!("{test_value:?}");
+            println!("{}\n\n",&ctx.code);
+            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            run.run(&mut BlankIO, &mut BlankIO).unwrap();
+            assert_eq!(run.cells[should_set.pointer.start+1],to_set_to);
+        }
     }
 
     struct BlankIO;
