@@ -83,11 +83,10 @@ impl BfContext {
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
-        let to_add_signed: i16 = to_add.into();
-        let diff_from_needed = rounded_squared.abs_diff(to_add_signed.into()) as usize;
+        let diff_from_needed = rounded_squared.abs_diff(to_add.value.into()) as usize;
         if diff_from_needed != 0 {
             self.point_add(as_byte_ref.data_index + 1);
-            let extra = if (rounded_squared * to_add.signum() as i32) < to_add_signed.into() {
+            let extra = if (rounded_squared) < to_add.value.into() {
                 "+"
             } else {
                 "-"
@@ -447,7 +446,6 @@ impl BfContext {
         });
         self.do_if_nonzero(&to_invert, code);
     }
-    //TODO: Make it so cases can have numbers above 255
     pub fn match_num<'a>(&'a mut self,var: Variable<ByteData>)->MatchBuilder<'a>{
         self.point(var.pointer.start);
         MatchBuilder{
@@ -481,6 +479,7 @@ impl<'a> MatchBuilder<'a>{
         let mut subtracted = 0;
         for (num,code) in sorted{
             let to_subtract=num.abs_diff(subtracted);
+            println!("{to_subtract}");
             self.ctx.add_to_var(Signedu8{negative:true,value: to_subtract}, self.var.get_byte_ref());
             self.ctx.point(self.var.pointer.start);
             self.ctx.write_code(&code);
@@ -650,6 +649,20 @@ mod test {
         }
     }
     #[test]
+    fn subtract(){
+        for i in 0..=255{
+            let mut ctx = BfContext::default();
+            let mut testing = ctx.declare_byte();
+            ctx.point(testing.pointer.start+1);
+            ctx.write_code("-");
+            ctx.add_to_var(Signedu8{negative:true,value: i}, testing.get_byte_ref());
+            println!("{i}={}",&ctx.code);
+            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            run.run(&mut BlankIO, &mut BlankIO).unwrap();
+            assert_eq!(run.cells[testing.pointer.start+1],255-i)
+        }
+    }
+    #[test]
     fn print() {
         let mut ctx = BfContext::default();
         let test_str = "The quick brown fox jumps over the lazy DOG1234567890";
@@ -776,7 +789,7 @@ mod test {
     #[test]
     fn match_num(){
         let to_set_to=123;
-        let test_values: &[(&[u8], usize)]=&[(&[3,4,1,5,6,240],5),(&[30],0),(&[0],0),(&[5],0)];
+        let test_values: &[(&[u8], usize)]=&[(&[3,4,1,5,6,255],5),(&[243],0),(&[0],0),(&[5],0)];
         for test_value in test_values{
             let mut ctx: BfContext = BfContext::default();
             let mut to_set=ctx.declare_byte();
