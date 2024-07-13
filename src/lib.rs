@@ -476,6 +476,7 @@ pub struct MatchBuilder<'a> {
     var: Variable<ByteData>,
     codes: HashMap<u8, String>,
 }
+
 impl<'a> MatchBuilder<'a> {
     pub fn case(mut self, num: u8, to_do: impl FnOnce(&mut BfContext)) -> Self {
         let old = self.ctx.code.clone();
@@ -513,6 +514,8 @@ pub struct ByteRef<'a, T> {
     pointer: usize,
     var: &'a mut Variable<T>,
 }
+/// Alias for ByteRef to hint that the function taking the MutableByteRef may mutate your data
+pub type MutableByteRef<'a,T>=ByteRef<'a,T>;
 pub trait MarkSet {
     fn mark_set(&mut self);
 }
