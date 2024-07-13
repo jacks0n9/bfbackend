@@ -480,17 +480,7 @@ impl<'a> MatchBuilder<'a> {
         }
     }
 }
-pub struct IfCondition<'a> {
-    left: &'a Variable<ByteData>,
-    right: &'a Variable<ByteData>,
-    comparsion_type: ComparisonType,
-}
-pub enum ComparisonType {
-    Equals,
-    NotEquals,
-    LeftGreaterThanRight,
-    LeftLessThanRight,
-}
+
 pub struct ByteRef<'a, T> {
     data_index: usize,
     pointer: usize,
