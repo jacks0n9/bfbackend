@@ -451,6 +451,7 @@ impl BfContext {
             codes: HashMap::new(),
         }
     }
+    /// Moves origin into destination, not emptying destination and esentially adding the two values together.
     pub fn move_byte<'a, A, B>(
         &mut self,
         mut origin: ByteRef<'a, A>,
