@@ -280,24 +280,12 @@ impl BfContext {
     }
     pub fn do_if_left_greater_than_right(
         &mut self,
-        left: &Variable<ByteData>,
-        right: &Variable<ByteData>,
+        mut left: Variable<ByteData>,
+        mut right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
     ) {
-        let mut right_temp = self.declare_byte();
-        let mut left_temp = self.declare_byte();
-        self.clone_cell(
-            right.pointer.start + 1,
-            right_temp.pointer.start + 1,
-            right.pointer.start,
-        );
-        self.add_to_var(Signedu8::from(1), right_temp.get_byte_ref());
-        self.clone_cell(
-            left.pointer.start + 1,
-            left_temp.pointer.start + 1,
-            left.pointer.start,
-        );
-        self.add_to_var(Signedu8::from(1), left_temp.get_byte_ref());
+        self.add_to_var(Signedu8::from(1), right.get_byte_ref());
+        self.add_to_var(Signedu8::from(1), left.get_byte_ref());
         let mut is_empty = self.declare_byte();
         let mut is_not_empty = self.declare_byte();
         self.set_variable(1, is_not_empty.get_byte_ref());
@@ -308,9 +296,9 @@ impl BfContext {
                     negative: true,
                     value: 1,
                 },
-                left_temp.get_byte_ref(),
+                left.get_byte_ref(),
             );
-            ctx.do_if_nonzero(&left_temp, |ctx| {
+            ctx.do_if_nonzero(&left, |ctx| {
                 ctx.add_to_var(
                     Signedu8 {
                         negative: true,
@@ -324,9 +312,9 @@ impl BfContext {
                     negative: true,
                     value: 1,
                 },
-                right_temp.get_byte_ref(),
+                right.get_byte_ref(),
             );
-            ctx.do_if_nonzero(&right_temp, |ctx| {
+            ctx.do_if_nonzero(&right, |ctx| {
                 ctx.add_to_var(
                     Signedu8 {
                         negative: true,
@@ -340,12 +328,12 @@ impl BfContext {
             });
             ctx.set_variable(2, is_empty.get_byte_ref());
         });
-        self.do_if_nonzero(&left_temp, code);
+        self.do_if_nonzero(&left, code);
     }
     pub fn do_if_left_less_than_right(
         &mut self,
-        left: &Variable<ByteData>,
-        right: &Variable<ByteData>,
+        left: Variable<ByteData>,
+        right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
     ) {
         let mut done = self.declare_byte();
@@ -738,7 +726,7 @@ mod test {
             let mut right = ctx.declare_byte();
             ctx.set_variable(test_value.1, right.get_byte_ref());
             let mut should_be_set = ctx.declare_byte();
-            ctx.do_if_left_greater_than_right(&left, &right, |ctx| {
+            ctx.do_if_left_greater_than_right(left, right, |ctx| {
                 ctx.set_variable(value, should_be_set.get_byte_ref());
             });
             println!("{}", &ctx.code);
