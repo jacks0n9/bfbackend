@@ -323,6 +323,8 @@ impl BfContext {
             ctx.set_variable(2, is_empty.get_byte_ref());
         });
         self.do_if_nonzero_mut(left.get_byte_ref(), code);
+        self.free_optional(is_empty);
+        self.free_optional(is_not_empty);
     }
     pub fn do_if_left_less_than_right(
         &mut self,
@@ -442,6 +444,7 @@ impl BfContext {
             ctx.write_code("-");
         });
         self.do_if_nonzero_mut(to_invert.get_byte_ref(), code);
+        self.free_optional(to_invert);
     }
     pub fn match_num(&mut self, var: Variable<ByteData>) -> MatchBuilder<'_> {
         self.point(var.pointer.start);
@@ -562,6 +565,7 @@ impl<T> GetPointer for ByteRef<'_, T> {
         self.pointer
     }
 }
+
 impl HasBeenSet for ByteRef<'_, ByteData> {
     fn has_been_set(&self) -> bool {
         self.var.var_data.has_been_set
