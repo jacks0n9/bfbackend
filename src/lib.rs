@@ -317,12 +317,12 @@ impl BfContext {
                     is_empty.get_byte_ref(),
                 );
             });
-            ctx.do_if_nonzero(&is_empty, |ctx| {
+            ctx.do_if_nonzero_mut(is_empty.get_byte_ref(), |ctx| {
                 ctx.set_variable(0, is_not_empty.get_byte_ref());
             });
             ctx.set_variable(2, is_empty.get_byte_ref());
         });
-        self.do_if_nonzero(&left, code);
+        self.do_if_nonzero_mut(left.get_byte_ref(), code);
     }
     pub fn do_if_left_less_than_right(
         &mut self,
@@ -341,7 +341,7 @@ impl BfContext {
                 done.get_byte_ref(),
             );
         });
-        self.do_if_nonzero(&done, code);
+        self.do_if_nonzero_mut(done.get_byte_ref(), code);
     }
     pub fn do_if_equal(
         &mut self,
@@ -402,6 +402,9 @@ impl BfContext {
         self.write_code("]");
         self.free_optional(comparison_space);
     }
+    /// Execute code if the variable's data is non-zero
+    /// This requires a &Variable<ByteData> to be passed in rather than a ByteRef
+    /// This is because this code is dependent on there being an extra cell directly to the left of the variable being checked
     pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
         let zero_cell = self.declare_byte();
         self.point(var.pointer.start);
@@ -420,6 +423,13 @@ impl BfContext {
         self.point(var.pointer.start);
         self.write_code("[-]");
     }
+    /// Same as do_if_nonzero, but generates less code by mutating the byte you are checking
+    pub fn do_if_nonzero_mut<'a,T>(&mut self,byte_to_check: MutableByteRef<'a, T>,code: impl FnOnce(&mut BfContext)){
+        self.loop_over_cell(byte_to_check.pointer, |ctx|{
+            ctx.write_code("[-]");
+            code(ctx)
+        })
+    }
     pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
         let mut to_invert = self.declare_byte();
         self.add_to_var(Signedu8::from(1), to_invert.get_byte_ref());
@@ -427,7 +437,7 @@ impl BfContext {
             ctx.point(to_invert.pointer.start + 1);
             ctx.write_code("-");
         });
-        self.do_if_nonzero(&to_invert, code);
+        self.do_if_nonzero_mut(to_invert.get_byte_ref(), code);
     }
     pub fn match_num(&mut self, var: Variable<ByteData>) -> MatchBuilder<'_> {
         self.point(var.pointer.start);
@@ -509,7 +519,11 @@ impl<'a> MatchBuilder<'a> {
         }
     }
 }
-
+impl<T> Pointable for ByteRef<'_,T>{
+    fn get_location(&self) -> usize {
+        self.pointer
+    }
+}
 pub struct ByteRef<'a, T> {
     data_index: usize,
     pointer: usize,
