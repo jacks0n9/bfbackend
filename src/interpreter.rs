@@ -1,3 +1,4 @@
+#![cfg(test)]
 use thiserror::Error;
 
 const CELLS_LEN: usize = 30000;
