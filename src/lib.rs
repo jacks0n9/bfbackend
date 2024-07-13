@@ -136,10 +136,6 @@ impl BfContext {
     fn write_code(&mut self, code: &str) {
         self.code += code
     }
-    fn reserve_and_point(&mut self, amount: usize) {
-        let pointer = self.reserve(amount);
-        self.point(pointer.start)
-    }
     fn point_add(&mut self, add: usize) {
         self.point(self.pointer + add)
     }
