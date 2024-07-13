@@ -271,6 +271,7 @@ impl BfContext {
             <<
             [>>>>>>>>>++++++++>]
     */
+    // TODO: accept byteref
     pub fn move_cell(&mut self, origin: usize, destination: usize) {
         self.loop_over_cell(origin, |ctx| {
             ctx.write_code("-");
@@ -443,6 +444,32 @@ impl BfContext {
             codes: HashMap::new(),
         }
     }
+    // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
+    // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts, 
+    // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
+    pub fn divide(&mut self,dividend: Variable<ByteData>,divisor:Variable<ByteData>)->DivisionResult{
+        let division_space=self.declare_array(5);
+        let dividend_temp=division_space.pointer.start;
+        let divisor_temp=division_space.pointer.start+2;
+        self.move_cell(dividend.pointer.start+1, dividend_temp);
+        self.move_cell(divisor.pointer.start+1, divisor_temp);
+        self.point(division_space.pointer.start);
+        self.write_code("[>+>-[>>>]<[[>+<-]>>+>]<<<<-]");
+        let mut remainder=self.declare_byte();
+        let mut quotient=self.declare_byte();
+        self.move_cell(division_space.pointer.start+1, remainder.pointer.start+1);
+        remainder.var_data.has_been_set=true;
+        self.move_cell(division_space.pointer.start+3, quotient.pointer.start+1);
+        quotient.var_data.has_been_set=true;
+        self.free_optional(division_space);
+        DivisionResult{
+            remainder,quotient
+        }
+    }
+}
+pub struct DivisionResult{
+    pub quotient: Variable<ByteData>,
+    pub remainder: Variable<ByteData>
 }
 pub struct MatchBuilder<'a> {
     ctx: &'a mut BfContext,
@@ -792,6 +819,25 @@ mod test {
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(run.cells[should_set.pointer.start + 1], to_set_to);
+        }
+    }
+    #[test]
+    fn divide(){
+        for dividend in 1..12{
+            for divisor in 1..12{
+                let mut ctx: BfContext = BfContext::default();
+                let mut dividend_var=ctx.declare_byte();
+                ctx.set_variable(dividend, dividend_var.get_byte_ref());
+                let mut divisor_var=ctx.declare_byte();
+                ctx.set_variable(divisor, divisor_var.get_byte_ref());
+                let answer=ctx.divide(dividend_var, divisor_var);
+                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                run.run(&mut BlankIO, &mut BlankIO).unwrap();
+                let quotient_correct=dividend/divisor;
+                let remainder_correct=dividend%divisor;
+                assert_eq!(run.cells[answer.quotient.pointer.start+1],quotient_correct);
+                assert_eq!(run.cells[answer.remainder.pointer.start+1],remainder_correct)
+            }
         }
     }
 
