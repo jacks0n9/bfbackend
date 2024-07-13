@@ -424,8 +424,12 @@ impl BfContext {
         self.write_code("[-]");
     }
     /// Same as do_if_nonzero, but generates less code by mutating the byte you are checking
-    pub fn do_if_nonzero_mut<'a,T>(&mut self,byte_to_check: MutableByteRef<'a, T>,code: impl FnOnce(&mut BfContext)){
-        self.loop_over_cell(byte_to_check.pointer, |ctx|{
+    pub fn do_if_nonzero_mut<'a, T>(
+        &mut self,
+        byte_to_check: MutableByteRef<'a, T>,
+        code: impl FnOnce(&mut BfContext),
+    ) {
+        self.loop_over_cell(byte_to_check.pointer, |ctx| {
             ctx.write_code("[-]");
             code(ctx)
         })
@@ -446,6 +450,18 @@ impl BfContext {
             var,
             codes: HashMap::new(),
         }
+    }
+    pub fn move_byte<'a, A, B>(
+        &mut self,
+        mut origin: ByteRef<'a, A>,
+        mut destination: ByteRef<'a, B>,
+    ) where
+        ByteRef<'a, A>: MarkSet,
+        ByteRef<'a, B>: MarkSet,
+    {
+        origin.mark_set();
+        destination.mark_set();
+        self.move_cell(origin.pointer, destination.pointer);
     }
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
     // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
@@ -519,7 +535,7 @@ impl<'a> MatchBuilder<'a> {
         }
     }
 }
-impl<T> Pointable for ByteRef<'_,T>{
+impl<T> Pointable for ByteRef<'_, T> {
     fn get_location(&self) -> usize {
         self.pointer
     }
