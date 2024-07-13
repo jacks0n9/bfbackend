@@ -1,3 +1,4 @@
+#![feature(type_alias_impl_trait)]
 use std::collections::HashMap;
 
 mod interpreter;
@@ -59,17 +60,15 @@ impl BfContext {
             },
         )
     }
-    pub fn add_to_var<'a, T: MarkSet + Into<ByteRef<'a, G>>, G: 'a>(
-        &mut self,
-        to_add: Signedu8,
-        mut byte_ref: T,
-    ) {
+    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, mut byte_ref: ByteRef<'a, T>)
+    where
+        ByteRef<'a, T>: MarkSet,
+    {
         if to_add.value == 0 {
             return;
         }
         byte_ref.mark_set();
-        let as_byte_ref: ByteRef<'a, _> = byte_ref.into();
-        self.point(as_byte_ref.var.pointer.start);
+        self.point(byte_ref.var.pointer.start);
         let before_add = self.clone();
         let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
@@ -77,15 +76,15 @@ impl BfContext {
         let square_loop = format!(
             "{}[-{}{}{}]",
             "+".repeat(rounded as usize),
-            ">".repeat(as_byte_ref.data_index + 1),
+            ">".repeat(byte_ref.data_index + 1),
             inner_add,
-            "<".repeat(as_byte_ref.data_index + 1)
+            "<".repeat(byte_ref.data_index + 1)
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
         let diff_from_needed = rounded_squared.abs_diff(to_add.value.into()) as usize;
         if diff_from_needed != 0 {
-            self.point_add(as_byte_ref.data_index + 1);
+            self.point_add(byte_ref.data_index + 1);
             let extra = if (rounded_squared) < to_add.value.into() {
                 "+"
             } else {
@@ -100,11 +99,10 @@ impl BfContext {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
-    pub fn set_variable<'a, T: HasBeenSet + MarkSet + GetPointer + Into<ByteRef<'a, G>>, G: 'a>(
-        &mut self,
-        value: u8,
-        byte_to_set: T,
-    ) {
+    pub fn set_variable<'a, T>(&mut self, value: u8, byte_to_set: ByteRef<'a, T>)
+    where
+        ByteRef<'a, T>: HasBeenSet + GetPointer + MarkSet,
+    {
         if byte_to_set.has_been_set() {
             self.point(byte_to_set.get_pointer());
             self.write_code("[-]");
@@ -445,31 +443,39 @@ impl BfContext {
         }
     }
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
-    // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts, 
+    // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
     // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
-    pub fn divide(&mut self,dividend: Variable<ByteData>,divisor:Variable<ByteData>)->DivisionResult{
-        let division_space=self.declare_array(5);
-        let dividend_temp=division_space.pointer.start;
-        let divisor_temp=division_space.pointer.start+2;
-        self.move_cell(dividend.pointer.start+1, dividend_temp);
-        self.move_cell(divisor.pointer.start+1, divisor_temp);
+    pub fn divide(
+        &mut self,
+        dividend: Variable<ByteData>,
+        divisor: Variable<ByteData>,
+    ) -> DivisionResult {
+        let division_space = self.declare_array(5);
+        let dividend_temp = division_space.pointer.start;
+        let divisor_temp = division_space.pointer.start + 2;
+        self.move_cell(dividend.pointer.start + 1, dividend_temp);
+        self.move_cell(divisor.pointer.start + 1, divisor_temp);
         self.point(division_space.pointer.start);
         self.write_code("[>+>-[>>>]<[[>+<-]>>+>]<<<<-]");
-        let mut remainder=self.declare_byte();
-        let mut quotient=self.declare_byte();
-        self.move_cell(division_space.pointer.start+1, remainder.pointer.start+1);
-        remainder.var_data.has_been_set=true;
-        self.move_cell(division_space.pointer.start+3, quotient.pointer.start+1);
-        quotient.var_data.has_been_set=true;
+        let mut remainder = self.declare_byte();
+        let mut quotient = self.declare_byte();
+        self.move_cell(
+            division_space.pointer.start + 1,
+            remainder.pointer.start + 1,
+        );
+        remainder.var_data.has_been_set = true;
+        self.move_cell(division_space.pointer.start + 3, quotient.pointer.start + 1);
+        quotient.var_data.has_been_set = true;
         self.free_optional(division_space);
-        DivisionResult{
-            remainder,quotient
+        DivisionResult {
+            remainder,
+            quotient,
         }
     }
 }
-pub struct DivisionResult{
+pub struct DivisionResult {
     pub quotient: Variable<ByteData>,
-    pub remainder: Variable<ByteData>
+    pub remainder: Variable<ByteData>,
 }
 pub struct MatchBuilder<'a> {
     ctx: &'a mut BfContext,
@@ -515,7 +521,7 @@ pub struct ByteRef<'a, T> {
     var: &'a mut Variable<T>,
 }
 /// Alias for ByteRef to hint that the function taking the MutableByteRef may mutate your data
-pub type MutableByteRef<'a,T>=ByteRef<'a,T>;
+pub type MutableByteRef<'a, T> = ByteRef<'a, T>;
 pub trait MarkSet {
     fn mark_set(&mut self);
 }
@@ -825,21 +831,27 @@ mod test {
         }
     }
     #[test]
-    fn divide(){
-        for dividend in 1..12{
-            for divisor in 1..12{
+    fn divide() {
+        for dividend in 1..12 {
+            for divisor in 1..12 {
                 let mut ctx: BfContext = BfContext::default();
-                let mut dividend_var=ctx.declare_byte();
+                let mut dividend_var = ctx.declare_byte();
                 ctx.set_variable(dividend, dividend_var.get_byte_ref());
-                let mut divisor_var=ctx.declare_byte();
+                let mut divisor_var = ctx.declare_byte();
                 ctx.set_variable(divisor, divisor_var.get_byte_ref());
-                let answer=ctx.divide(dividend_var, divisor_var);
+                let answer = ctx.divide(dividend_var, divisor_var);
                 let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
-                let quotient_correct=dividend/divisor;
-                let remainder_correct=dividend%divisor;
-                assert_eq!(run.cells[answer.quotient.pointer.start+1],quotient_correct);
-                assert_eq!(run.cells[answer.remainder.pointer.start+1],remainder_correct)
+                let quotient_correct = dividend / divisor;
+                let remainder_correct = dividend % divisor;
+                assert_eq!(
+                    run.cells[answer.quotient.pointer.start + 1],
+                    quotient_correct
+                );
+                assert_eq!(
+                    run.cells[answer.remainder.pointer.start + 1],
+                    remainder_correct
+                )
             }
         }
     }
