@@ -1,4 +1,3 @@
-#![feature(type_alias_impl_trait)]
 use std::collections::HashMap;
 
 mod interpreter;
