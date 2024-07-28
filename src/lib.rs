@@ -157,9 +157,10 @@ impl BfContext {
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
         self.pointer = location
     }
-    pub fn clear_cells<T>(&mut self, var: &Variable<T>) {
-        self.point(var);
-        for _ in 0..var.pointer.offset {
+    pub fn clear_cells<T: GetRange>(&mut self, var: &T) {
+        let range=var.get_range();
+        self.point(range.start);
+        for _ in 0..range.offset {
             self.write_code("[-]");
             self.point_add(1);
         }
@@ -239,18 +240,19 @@ impl BfContext {
         }
         cloned
     }
-    pub fn free<T>(&mut self, var: Variable<T>) {
-        self.clear_cells(&var);
+    pub fn free<T: GetRange>(&mut self, to_free: T) {
+        let range=to_free.get_range();
+        self.clear_cells(&to_free);
         self.taken = self
             .taken
             .iter()
             .copied()
-            .filter(|range| range.start != var.pointer.start)
+            .filter(|filter_range| filter_range.start != range.start)
             .collect();
     }
-    pub fn free_optional<T>(&mut self, var: Variable<T>) {
+    pub fn free_optional<T:GetRange>(&mut self, to_free: T) {
         if self.must_free != 0 {
-            self.free(var);
+            self.free(to_free);
         }
     }
     // algorithm for checking if first two cells are equal:
@@ -467,7 +469,6 @@ impl BfContext {
         destination.mark_set();
         self.move_cell(origin.pointer, destination.pointer);
     }
-    
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
     // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
     // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
@@ -499,6 +500,20 @@ impl BfContext {
         }
     }
 }
+pub trait GetRange{
+    fn get_range(&self)->MemoryRange;
+}
+impl<T> GetRange for Variable<T>{
+    fn get_range(&self)->MemoryRange {
+        self.pointer
+    }
+}
+impl GetRange for MemoryRange{
+    fn get_range(&self)->MemoryRange {
+        self.clone()
+    }
+}
+
 pub struct DivisionResult {
     pub quotient: Variable<ByteData>,
     pub remainder: Variable<ByteData>,
@@ -634,7 +649,7 @@ impl<T> Pointable for &Variable<T> {
     }
 }
 #[derive(Clone, Copy)]
-struct MemoryRange {
+pub struct MemoryRange {
     /// First usable memory is this cell
     start: usize,
     /// Last usable memory is (start+offset)-1
