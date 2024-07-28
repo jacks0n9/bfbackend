@@ -59,7 +59,7 @@ impl BfContext {
             },
         )
     }
-    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_to_set: &mut ByteRef<'a, T>)
+    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_to_set: &mut MutableByteRef<'a, T>)
     where
         ByteRef<'a, T>: MarkSet,
     {
@@ -98,7 +98,7 @@ impl BfContext {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
-    pub fn set_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, value: u8)
+    pub fn set_var<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, value: u8)
     where
         ByteRef<'a, T>: HasBeenSet + GetPointer + MarkSet,
     {
