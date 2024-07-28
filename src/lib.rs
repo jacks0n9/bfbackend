@@ -59,7 +59,7 @@ impl BfContext {
             },
         )
     }
-    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, mut byte_ref: ByteRef<'a, T>)
+    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_ref: &mut ByteRef<'a, T>)
     where
         ByteRef<'a, T>: MarkSet,
     {
@@ -98,7 +98,7 @@ impl BfContext {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
-    pub fn set_variable<'a, T>(&mut self, value: u8, byte_to_set: ByteRef<'a, T>)
+    pub fn set_variable<'a, T>(&mut self, value: u8, byte_to_set: &mut ByteRef<'a, T>)
     where
         ByteRef<'a, T>: HasBeenSet + GetPointer + MarkSet,
     {
@@ -201,7 +201,7 @@ impl BfContext {
     /// Read the data len of the array-1 characters. If your interpreter doesn't ask for input during execution, this will hang if not given enough characters
     pub fn read_n_chars(&mut self, store_to: &mut Variable<ArrayData>) {
         let amount = store_to.var_data.data_len.try_into().unwrap_or(255);
-        self.set_variable(amount - 2, store_to.get_byte_ref(0));
+        self.set_variable(amount - 2, &mut store_to.get_byte_ref(0));
         self.point(store_to.pointer.start + 1);
         self.write_code("[-<+>]");
         self.point_add(1);
@@ -278,19 +278,19 @@ impl BfContext {
         mut right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
     ) {
-        self.add_to_var(Signedu8::from(1), right.get_byte_ref());
-        self.add_to_var(Signedu8::from(1), left.get_byte_ref());
+        self.add_to_var(Signedu8::from(1), &mut right.get_byte_ref());
+        self.add_to_var(Signedu8::from(1), &mut left.get_byte_ref());
         let mut is_empty = self.declare_byte();
         let mut is_not_empty = self.declare_byte();
-        self.set_variable(1, is_not_empty.get_byte_ref());
-        self.set_variable(2, is_empty.get_byte_ref());
+        self.set_variable(1, &mut is_not_empty.get_byte_ref());
+        self.set_variable(2, &mut is_empty.get_byte_ref());
         self.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
             ctx.add_to_var(
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                left.get_byte_ref(),
+                &mut left.get_byte_ref(),
             );
             ctx.do_if_nonzero(&left, |ctx| {
                 ctx.add_to_var(
@@ -298,7 +298,7 @@ impl BfContext {
                         negative: true,
                         value: 1,
                     },
-                    is_empty.get_byte_ref(),
+                    &mut is_empty.get_byte_ref(),
                 );
             });
             ctx.add_to_var(
@@ -306,7 +306,7 @@ impl BfContext {
                     negative: true,
                     value: 1,
                 },
-                right.get_byte_ref(),
+                &mut right.get_byte_ref(),
             );
             ctx.do_if_nonzero(&right, |ctx| {
                 ctx.add_to_var(
@@ -314,13 +314,13 @@ impl BfContext {
                         negative: true,
                         value: 1,
                     },
-                    is_empty.get_byte_ref(),
+                    &mut is_empty.get_byte_ref(),
                 );
             });
             ctx.do_if_nonzero_mut(is_empty.get_byte_ref(), |ctx| {
-                ctx.set_variable(0, is_not_empty.get_byte_ref());
+                ctx.set_variable(0, &mut is_not_empty.get_byte_ref());
             });
-            ctx.set_variable(2, is_empty.get_byte_ref());
+            ctx.set_variable(2, &mut is_empty.get_byte_ref());
         });
         self.do_if_nonzero_mut(left.get_byte_ref(), code);
         self.free_optional(is_empty);
@@ -333,14 +333,14 @@ impl BfContext {
         code: impl FnOnce(&mut BfContext),
     ) {
         let mut done = self.declare_byte();
-        self.set_variable(1, done.get_byte_ref());
+        self.set_variable(1, &mut done.get_byte_ref());
         self.do_if_left_greater_than_right(left, right, |ctx| {
             ctx.add_to_var(
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                done.get_byte_ref(),
+                &mut done.get_byte_ref(),
             );
         });
         self.do_if_nonzero_mut(done.get_byte_ref(), code);
@@ -438,7 +438,7 @@ impl BfContext {
     }
     pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
         let mut to_invert = self.declare_byte();
-        self.add_to_var(Signedu8::from(1), to_invert.get_byte_ref());
+        self.add_to_var(Signedu8::from(1), &mut to_invert.get_byte_ref());
         self.do_if_nonzero(var, |ctx| {
             ctx.point(to_invert.pointer.start + 1);
             ctx.write_code("-");
@@ -467,6 +467,7 @@ impl BfContext {
         destination.mark_set();
         self.move_cell(origin.pointer, destination.pointer);
     }
+    
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
     // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
     // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
@@ -531,7 +532,7 @@ impl<'a> MatchBuilder<'a> {
                     negative: true,
                     value: to_subtract,
                 },
-                self.var.get_byte_ref(),
+                &mut self.var.get_byte_ref(),
             );
             self.ctx.point(self.var.pointer.start);
             self.ctx.write_code(&code);
@@ -683,9 +684,9 @@ mod test {
     fn add_value(value: u8) {
         let mut ctx = BfContext::default();
         let mut testing = ctx.declare_byte();
-        let byte_ref = testing.get_byte_ref();
+        let mut byte_ref = testing.get_byte_ref();
         let pointer = byte_ref.pointer;
-        ctx.add_to_var(Signedu8::from(value), byte_ref);
+        ctx.add_to_var(Signedu8::from(value), &mut byte_ref);
         let code = ctx.code;
         let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
@@ -709,7 +710,7 @@ mod test {
                     negative: true,
                     value: i,
                 },
-                testing.get_byte_ref(),
+                &mut testing.get_byte_ref(),
             );
             println!("{i}={}", &ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -732,14 +733,14 @@ mod test {
         let mut ctx = BfContext::default();
         let value = 2;
         let mut var1 = ctx.declare_byte();
-        ctx.set_variable(3, var1.get_byte_ref());
+        ctx.set_variable(3, &mut var1.get_byte_ref());
         let mut var2 = ctx.declare_byte();
-        ctx.set_variable(3, var2.get_byte_ref());
+        ctx.set_variable(3, &mut var2.get_byte_ref());
         let mut is_good = ctx.declare_byte();
-        let byte_ref = is_good.get_byte_ref();
+        let mut byte_ref = is_good.get_byte_ref();
         let pointer = byte_ref.pointer;
         ctx.do_if_equal(&var1, &var2, |ctx| {
-            ctx.add_to_var(Signedu8::from(value), byte_ref);
+            ctx.add_to_var(Signedu8::from(value), &mut byte_ref);
         });
         println!("{}", &ctx.code);
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -753,7 +754,7 @@ mod test {
         let mut ctx = BfContext::default();
         let value = 6;
         let mut var1 = ctx.declare_byte();
-        ctx.add_to_var(Signedu8::from(value), var1.get_byte_ref());
+        ctx.add_to_var(Signedu8::from(value), &mut var1.get_byte_ref());
         let var2 = ctx.declare_byte();
         ctx.move_cell(var1.pointer.start + 1, var2.pointer.start + 1);
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -778,12 +779,12 @@ mod test {
         for test_value in test_values {
             let mut ctx = BfContext::default();
             let mut left = ctx.declare_byte();
-            ctx.set_variable(test_value.0, left.get_byte_ref());
+            ctx.set_variable(test_value.0, &mut left.get_byte_ref());
             let mut right = ctx.declare_byte();
-            ctx.set_variable(test_value.1, right.get_byte_ref());
+            ctx.set_variable(test_value.1, &mut right.get_byte_ref());
             let mut should_be_set = ctx.declare_byte();
             ctx.do_if_left_greater_than_right(left, right, |ctx| {
-                ctx.set_variable(value, should_be_set.get_byte_ref());
+                ctx.set_variable(value, &mut should_be_set.get_byte_ref());
             });
             println!("{}", &ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -821,7 +822,7 @@ mod test {
         let mut should_be_set = ctx.declare_byte();
         let value = 92;
         ctx.do_if_zero(&zero, |ctx| {
-            ctx.set_variable(value, should_be_set.get_byte_ref());
+            ctx.set_variable(value, &mut should_be_set.get_byte_ref());
         });
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
@@ -840,13 +841,13 @@ mod test {
             let mut ctx: BfContext = BfContext::default();
             let mut to_set = ctx.declare_byte();
             let correct = test_value.0[test_value.1];
-            ctx.set_variable(correct, to_set.get_byte_ref());
+            ctx.set_variable(correct, &mut to_set.get_byte_ref());
             let mut should_set = ctx.declare_byte();
             let mut matching = ctx.match_num(to_set);
             for num in test_value.0 {
                 if *num == correct {
                     matching = matching.case(*num, |ctx| {
-                        ctx.add_to_var(to_set_to.into(), should_set.get_byte_ref());
+                        ctx.add_to_var(to_set_to.into(), &mut should_set.get_byte_ref());
                     });
                 } else {
                     matching = matching.case(*num, |_ctx| {});
@@ -866,9 +867,9 @@ mod test {
             for divisor in 1..12 {
                 let mut ctx: BfContext = BfContext::default();
                 let mut dividend_var = ctx.declare_byte();
-                ctx.set_variable(dividend, dividend_var.get_byte_ref());
+                ctx.set_variable(dividend, &mut dividend_var.get_byte_ref());
                 let mut divisor_var = ctx.declare_byte();
-                ctx.set_variable(divisor, divisor_var.get_byte_ref());
+                ctx.set_variable(divisor, &mut divisor_var.get_byte_ref());
                 let answer = ctx.divide(dividend_var, divisor_var);
                 let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
