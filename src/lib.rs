@@ -772,10 +772,8 @@ mod test {
     fn equals() {
         let mut ctx = BfContext::default();
         let value = 2;
-        let mut var1 = ctx.declare_byte();
-        ctx.set_variable(3, &mut var1.get_byte_ref());
-        let mut var2 = ctx.declare_byte();
-        ctx.set_variable(3, &mut var2.get_byte_ref());
+        let var1 = ctx.declare_and_set_byte(3);
+        let var2 = ctx.declare_and_set_byte(3);
         let mut is_good = ctx.declare_byte();
         let mut byte_ref = is_good.get_byte_ref();
         let pointer = byte_ref.pointer;
@@ -793,8 +791,7 @@ mod test {
     fn move_cell() {
         let mut ctx = BfContext::default();
         let value = 6;
-        let mut var1 = ctx.declare_byte();
-        ctx.add_to_var(Signedu8::from(value), &mut var1.get_byte_ref());
+        let var1 = ctx.declare_and_set_byte(value);
         let var2 = ctx.declare_byte();
         ctx.move_cell(var1.pointer.start + 1, var2.pointer.start + 1);
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -818,10 +815,8 @@ mod test {
         let value = 39;
         for test_value in test_values {
             let mut ctx = BfContext::default();
-            let mut left = ctx.declare_byte();
-            ctx.set_variable(test_value.0, &mut left.get_byte_ref());
-            let mut right = ctx.declare_byte();
-            ctx.set_variable(test_value.1, &mut right.get_byte_ref());
+            let left = ctx.declare_and_set_byte(test_value.0);
+            let right = ctx.declare_and_set_byte(test_value.1);
             let mut should_be_set = ctx.declare_byte();
             ctx.do_if_left_greater_than_right(left, right, |ctx| {
                 ctx.set_variable(value, &mut should_be_set.get_byte_ref());
@@ -879,9 +874,8 @@ mod test {
         ];
         for test_value in test_values {
             let mut ctx: BfContext = BfContext::default();
-            let mut to_set = ctx.declare_byte();
             let correct = test_value.0[test_value.1];
-            ctx.set_variable(correct, &mut to_set.get_byte_ref());
+            let to_set = ctx.declare_and_set_byte(correct);
             let mut should_set = ctx.declare_byte();
             let mut matching = ctx.match_num(to_set);
             for num in test_value.0 {
@@ -906,10 +900,8 @@ mod test {
         for dividend in 1..12 {
             for divisor in 1..12 {
                 let mut ctx: BfContext = BfContext::default();
-                let mut dividend_var = ctx.declare_byte();
-                ctx.set_variable(dividend, &mut dividend_var.get_byte_ref());
-                let mut divisor_var = ctx.declare_byte();
-                ctx.set_variable(divisor, &mut divisor_var.get_byte_ref());
+                let dividend_var = ctx.declare_and_set_byte(dividend);
+                let divisor_var = ctx.declare_and_set_byte(divisor);
                 let answer = ctx.divide(dividend_var, divisor_var);
                 let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
