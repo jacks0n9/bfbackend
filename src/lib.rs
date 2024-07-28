@@ -469,6 +469,26 @@ impl BfContext {
         destination.mark_set();
         self.move_cell(origin.pointer, destination.pointer);
     }
+    /// Multiplies num1 by num2 and puts the result into output.
+    /// Sets num2 to zero
+    pub fn multiply<'a,'b,'c,A,B,C>(&mut self,num1: &mut MutableByteRef<'a,A>,num2: &mut MutableByteRef<'b,B>,output: &mut MutableByteRef<'c,C>)where MutableByteRef<'a,A>: MarkSet,MutableByteRef<'b,B>: MarkSet, MutableByteRef<'c,C>: MarkSet {
+        self.loop_over_cell(num2.pointer, |ctx|{
+            // subtract one from num2 because we are looping over it
+            ctx.add_to_var(Signedu8{negative: true,value: 1}, num2);
+            let temp_range=ctx.reserve(1);
+            // temp var to store copy of num1
+            let temp=temp_range.start;
+            ctx.move_cell(num1.pointer,temp);
+            // loop over our copy of num1, adding 1 to the output and putting the temp variable back into num1 for efficiency
+            ctx.loop_over_cell(temp, |ctx|{
+                ctx.point(temp);
+                ctx.write_code("-");
+                ctx.add_to_var(Signedu8::from(1), num1);
+                ctx.add_to_var(Signedu8::from(1), output);
+            });
+            ctx.free_optional(temp_range);
+        })
+    }
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
     // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
     // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
@@ -498,6 +518,11 @@ impl BfContext {
             remainder,
             quotient,
         }
+    }
+    pub fn declare_and_set_byte(&mut self,value: u8)->Variable<ByteData>{
+        let mut var=self.declare_byte();
+        self.set_variable(value,&mut var.get_byte_ref());
+        var
     }
 }
 pub trait GetRange{
@@ -898,6 +923,21 @@ mod test {
                     run.cells[answer.remainder.pointer.start + 1],
                     remainder_correct
                 )
+            }
+        }
+    }
+    #[test]
+    fn multiply(){
+        for first in 0..8{
+            for second in 0..8{
+                let mut ctx=BfContext::default();
+                let mut first_var=ctx.declare_and_set_byte(first);
+                let mut second_var=ctx.declare_and_set_byte(second);
+                let mut output=ctx.declare_byte();
+                ctx.multiply(&mut first_var.get_byte_ref(), &mut second_var.get_byte_ref(), &mut output.get_byte_ref());
+                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                run.run(&mut BlankIO, &mut BlankIO).unwrap();
+                assert_eq!(run.cells[output.pointer.start+1],first*second);
             }
         }
     }
