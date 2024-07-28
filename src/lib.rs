@@ -59,15 +59,15 @@ impl BfContext {
             },
         )
     }
-    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_ref: &mut ByteRef<'a, T>)
+    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_to_set: &mut ByteRef<'a, T>)
     where
         ByteRef<'a, T>: MarkSet,
     {
         if to_add.value == 0 {
             return;
         }
-        byte_ref.mark_set();
-        self.point(byte_ref.var.pointer.start);
+        byte_to_set.mark_set();
+        self.point(byte_to_set.var.pointer.start);
         let before_add = self.clone();
         let root = (to_add.value as f64).sqrt();
         let rounded = root.round();
@@ -75,15 +75,15 @@ impl BfContext {
         let square_loop = format!(
             "{}[-{}{}{}]",
             "+".repeat(rounded as usize),
-            ">".repeat(byte_ref.data_index + 1),
+            ">".repeat(byte_to_set.data_index + 1),
             inner_add,
-            "<".repeat(byte_ref.data_index + 1)
+            "<".repeat(byte_to_set.data_index + 1)
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
         let diff_from_needed = rounded_squared.abs_diff(to_add.value.into()) as usize;
         if diff_from_needed != 0 {
-            self.point_add(byte_ref.data_index + 1);
+            self.point_add(byte_to_set.data_index + 1);
             let extra = if (rounded_squared) < to_add.value.into() {
                 "+"
             } else {
@@ -98,7 +98,7 @@ impl BfContext {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
-    pub fn set_variable<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, value: u8)
+    pub fn set_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, value: u8)
     where
         ByteRef<'a, T>: HasBeenSet + GetPointer + MarkSet,
     {
@@ -202,7 +202,7 @@ impl BfContext {
     /// Read the data len of the array-1 characters. If your interpreter doesn't ask for input during execution, this will hang if not given enough characters
     pub fn read_n_chars(&mut self, store_to: &mut Variable<ArrayData>) {
         let amount = store_to.var_data.data_len.try_into().unwrap_or(255);
-        self.set_variable(&mut store_to.get_byte_ref(0),amount - 2);
+        self.set_var(&mut store_to.get_byte_ref(0),amount - 2);
         self.point(store_to.pointer.start + 1);
         self.write_code("[-<+>]");
         self.point_add(1);
@@ -284,8 +284,8 @@ impl BfContext {
         self.add_to_var(Signedu8::from(1), &mut left.get_byte_ref());
         let mut is_empty = self.declare_byte();
         let mut is_not_empty = self.declare_byte();
-        self.set_variable( &mut is_not_empty.get_byte_ref(),1);
-        self.set_variable(&mut is_empty.get_byte_ref(),2);
+        self.set_var( &mut is_not_empty.get_byte_ref(),1);
+        self.set_var(&mut is_empty.get_byte_ref(),2);
         self.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
             ctx.add_to_var(
                 Signedu8 {
@@ -320,9 +320,9 @@ impl BfContext {
                 );
             });
             ctx.do_if_nonzero_mut(is_empty.get_byte_ref(), |ctx| {
-                ctx.set_variable(&mut is_not_empty.get_byte_ref(),0);
+                ctx.set_var(&mut is_not_empty.get_byte_ref(),0);
             });
-            ctx.set_variable(&mut is_empty.get_byte_ref(),2);
+            ctx.set_var(&mut is_empty.get_byte_ref(),2);
         });
         self.do_if_nonzero_mut(left.get_byte_ref(), code);
         self.free_optional(is_empty);
@@ -335,7 +335,7 @@ impl BfContext {
         code: impl FnOnce(&mut BfContext),
     ) {
         let mut done = self.declare_byte();
-        self.set_variable(&mut done.get_byte_ref(),1);
+        self.set_var(&mut done.get_byte_ref(),1);
         self.do_if_left_greater_than_right(left, right, |ctx| {
             ctx.add_to_var(
                 Signedu8 {
@@ -521,7 +521,7 @@ impl BfContext {
     }
     pub fn declare_and_set_byte(&mut self,value: u8)->Variable<ByteData>{
         let mut var=self.declare_byte();
-        self.set_variable(&mut var.get_byte_ref(),value);
+        self.set_var(&mut var.get_byte_ref(),value);
         var
     }
 }
@@ -819,7 +819,7 @@ mod test {
             let right = ctx.declare_and_set_byte(test_value.1);
             let mut should_be_set = ctx.declare_byte();
             ctx.do_if_left_greater_than_right(left, right, |ctx| {
-                ctx.set_variable(&mut should_be_set.get_byte_ref(),value);
+                ctx.set_var(&mut should_be_set.get_byte_ref(),value);
             });
             println!("{}", &ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -857,7 +857,7 @@ mod test {
         let mut should_be_set = ctx.declare_byte();
         let value = 92;
         ctx.do_if_zero(&zero, |ctx| {
-            ctx.set_variable(&mut should_be_set.get_byte_ref(),value);
+            ctx.set_var(&mut should_be_set.get_byte_ref(),value);
         });
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
