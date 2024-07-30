@@ -196,8 +196,21 @@ impl BfContext {
         self.point(as_byte_ref.pointer);
         self.write_code(",")
     }
-    /// Reads until a null byte or max size
-    pub fn read_string(&mut self, store_to: &mut Variable<ArrayData>, max_len: u8) {}
+    /// Reads until a null byte or max capacity of the store_to variable, which is its pointers offset minus 2.
+    /// One byte is reserved for the null byte and the other byte is for an empty byte at the start used for navigating the string efficiently
+    /// String will be null-terminated, but data after the null-byte is not guaranteed to be zero, even if it is within the limits of the variable
+    pub fn read_string(&mut self, store_to: &mut Variable<ArrayData>) {
+        self.point((store_to.pointer.start+store_to.pointer.offset)-1);
+        self.write_code("-");
+        self.point(store_to.pointer.start);
+        // fill up cells with ones and return to store_to.pointer.start
+        self.write_code(">+[>+]<[<]");
+        // read cells until we encounter null byte
+        self.write_code(">[,>]<[<]");
+
+
+
+    }
     //>[[-<+>]>] to shift all cells over
     /// Read the data len of the array-1 characters. If your interpreter doesn't ask for input during execution, this will hang if not given enough characters
     pub fn read_n_chars(&mut self, store_to: &mut Variable<ArrayData>) {
