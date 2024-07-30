@@ -961,7 +961,7 @@ mod test {
     #[test]
     fn multiply() {
         for first in 0..8 {
-            for second in 0..8 {
+            for second in 0..(255/first.max(1)) {
                 let mut ctx = BfContext::default();
                 let mut first_var = ctx.declare_and_set_byte(first);
                 let mut second_var = ctx.declare_and_set_byte(second);
