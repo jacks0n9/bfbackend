@@ -539,6 +539,21 @@ impl BfContext {
         self.set_var(&mut var.get_byte_ref(), value);
         var
     }
+    
+    pub fn pow<'a,'b,'c,A,B,C>(&mut self,base: &mut ByteRef<'a,A>,exponent: &mut MutableByteRef<'b,B>,output: &mut MutableByteRef<'c, C>)where MutableByteRef<'a,A>:MarkSet, MutableByteRef<'b,B>: MarkSet,MutableByteRef<'c,C>: MarkSet{
+        self.point(output.pointer);
+        self.write_code("+");
+        self.loop_over_cell(exponent.pointer, |ctx|{
+            ctx.add_to_var(Signedu8{negative: true,value:1}, exponent);
+            let mut temp_output=ctx.declare_byte();
+            let mut cloned_base=ctx.declare_byte();
+            ctx.clone_cell(base.pointer, cloned_base.pointer.start+1, cloned_base.pointer.start);
+            ctx.multiply(output, &mut cloned_base.get_byte_ref(), &mut temp_output.get_byte_ref());
+            ctx.point(output.pointer);
+            ctx.write_code("[-]");
+            ctx.move_byte(&mut temp_output.get_byte_ref(), output);
+        });
+    }
 }
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
@@ -950,6 +965,26 @@ mod test {
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 assert_eq!(run.cells[output.pointer.start + 1], first * second);
             }
+        }
+    }
+    #[test]
+    fn pow(){
+        for base in 1_u8..=255{
+            let floored=256.0_f64.log(base as f64).floor() as u8;
+            for pow in 1..floored{
+                let mut ctx = BfContext::default();
+                let mut base_var=ctx.declare_and_set_byte(base);
+                let mut pow_var=ctx.declare_and_set_byte(pow);
+                let mut output=ctx.declare_byte();
+                ctx.pow(&mut base_var.get_byte_ref(), &mut pow_var.get_byte_ref(), &mut output.get_byte_ref());
+                println!("{}", ctx.code);
+                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                run.run(&mut BlankIO, &mut BlankIO).unwrap();
+                println!("{base}^{pow}");
+                assert_eq!(run.cells[output.pointer.start+1],base.pow(pow.into()));
+                break;
+            }
+            break
         }
     }
 
