@@ -457,13 +457,13 @@ impl BfContext {
         }
     }
     /// Moves origin into destination, not emptying destination and esentially adding the two values together.
-    pub fn move_byte<'a, A, B>(
+    pub fn move_byte<'a, 'b, A, B>(
         &mut self,
-        mut origin: ByteRef<'a, A>,
-        mut destination: ByteRef<'a, B>,
+        origin: &mut ByteRef<'a, A>,
+        destination: &mut ByteRef<'b, B>,
     ) where
         ByteRef<'a, A>: MarkSet,
-        ByteRef<'a, B>: MarkSet,
+        ByteRef<'b, B>: MarkSet,
     {
         origin.mark_set();
         destination.mark_set();
