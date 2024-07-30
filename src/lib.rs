@@ -539,7 +539,17 @@ impl BfContext {
         self.set_var(&mut var.get_byte_ref(), value);
         var
     }
-    
+    pub fn null_terminated_array_iter(&mut self,array: Variable<ArrayData>,for_each: impl FnOnce(&mut BfContext)){
+        self.point(array.pointer.start);
+        self.write_code("[-]");
+        self.point_add(1);
+        self.write_code("[");
+        for_each(self);
+        self.point(array.pointer.start+1);
+        self.write_code(">]");
+        self.write_code("<[<]");
+        self.pointer=array.pointer.start;
+    }
     pub fn pow<'a,'b,'c,A,B,C>(&mut self,base: &mut ByteRef<'a,A>,exponent: &mut MutableByteRef<'b,B>,output: &mut MutableByteRef<'c, C>)where MutableByteRef<'a,A>:MarkSet, MutableByteRef<'b,B>: MarkSet,MutableByteRef<'c,C>: MarkSet{
         self.point(output.pointer);
         self.write_code("+");
