@@ -516,18 +516,18 @@ impl BfContext {
         })
     }
     /// Multiplies num1 by a number known at compile time
-    /// If destroy_num2 is false, then the contents of num1 will be preserved at the cost of more code being generatedk
+    /// If destroy_num1 is false, then the contents of num1 will be preserved at the cost of more code being generatedk
     pub fn multiply_const<'a, 'b, A, B>(
         &mut self,
         num1: &mut MutableByteRef<'a, A>,
         num2: u8,
         output: &mut MutableByteRef<'b, B>,
-        destroy_num2: bool,
+        destroy_num1: bool,
     ) where
         MutableByteRef<'a, A>: MarkSet,
         MutableByteRef<'b, B>: MarkSet,
     {
-        if destroy_num2 {
+        if destroy_num1 {
             self.loop_over_cell(num1.pointer, |ctx| {
                 ctx.add_to_var(
                     num1,
