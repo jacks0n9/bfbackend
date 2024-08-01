@@ -514,6 +514,45 @@ impl BfContext {
             ctx.free_optional(temp_range);
         })
     }
+    /// Multiplies num1 by a number known at compile time
+    /// If destroy_num2 is false, then the contents of num1 will be preserved at the cost of more code being generatedk
+    pub fn multiply_const<'a, 'b, A, B>(
+        &mut self,
+        num1: &mut MutableByteRef<'a, A>,
+        num2: u8,
+        output: &mut MutableByteRef<'b, B>,
+        destroy_num2: bool,
+    ) where
+        MutableByteRef<'a, A>: MarkSet,
+        MutableByteRef<'b, B>: MarkSet,
+    {
+        if destroy_num2 {
+            self.loop_over_cell(num1.pointer, |ctx| {
+                ctx.add_to_var(
+                    num1,
+                    Signedu8 {
+                        value: 1,
+                        negative: true,
+                    },
+                );
+                ctx.in_place_add(output, Signedu8::from(num2));
+            })
+        } else {
+            let temp = self.reserve(1).start;
+            self.move_cell(num1.pointer, temp);
+            self.loop_over_cell(temp, |ctx| {
+                ctx.in_place_add_cell(
+                    temp,
+                    Signedu8 {
+                        value: 1,
+                        negative: true,
+                    },
+                );
+                ctx.in_place_add(output, Signedu8::from(num2));
+                ctx.in_place_add(num1, Signedu8::from(1));
+            })
+        }
+    }
     // cool division algorithm that daniel cristofani gave to me: [>+>-[>>>]<[[>+<-]>>+>]<<<<-]
     // "(Dividend remainder divisor quotient zero zero). This is easy to adapt for other memory layouts,
     // just the distance from one zero to the other needs to be the same as the distance from divisor to remainder or dividend, or some other known nonzero."
@@ -605,10 +644,13 @@ impl BfContext {
     where
         MutableByteRef<'a, T>: MarkSet,
     {
-        self.point(byte_to_set.pointer);
+        self.in_place_add_cell(byte_to_set.pointer, to_add);
+        byte_to_set.mark_set();
+    }
+    fn in_place_add_cell(&mut self, cell: usize, to_add: Signedu8) {
+        self.point(cell);
         let to_repeat = if to_add.negative { "-" } else { "+" };
         self.write_code(&to_repeat.repeat(to_add.value.into()));
-        byte_to_set.mark_set();
     }
 }
 pub trait GetRange {
@@ -1022,6 +1064,29 @@ mod test {
                 assert_eq!(run.cells[output.pointer.start + 1], first * second);
             }
         }
+    }
+    #[test]
+    fn multiply_const() {
+        fn inner(destroy: bool) {
+            for first in 0..8 {
+                for second in 0..(255 / first.max(1)) {
+                    let mut ctx = BfContext::default();
+                    let mut first_var = ctx.declare_and_set_byte(first);
+                    let mut output = ctx.declare_byte();
+                    ctx.multiply_const(
+                        &mut first_var.get_byte_ref(),
+                        second,
+                        &mut output.get_byte_ref(),
+                        destroy,
+                    );
+                    let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                    run.run(&mut BlankIO, &mut BlankIO).unwrap();
+                    assert_eq!(run.cells[output.pointer.start + 1], first * second);
+                }
+            }
+        }
+        inner(true);
+        inner(false);
     }
     #[test]
     fn pow() {
