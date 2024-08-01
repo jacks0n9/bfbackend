@@ -287,9 +287,19 @@ impl BfContext {
     }
     pub fn do_if_left_greater_than_right(
         &mut self,
+        left: Variable<ByteData>,
+        right: Variable<ByteData>,
+        code: impl FnOnce(&mut BfContext)
+    ){
+        let no_else: Option<fn(&mut BfContext)>=None;
+        self.do_if_left_greater_than_right_with_else(left, right, code, no_else)
+    }
+    pub fn do_if_left_greater_than_right_with_else(
+        &mut self,
         mut left: Variable<ByteData>,
         mut right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
+        else_if_opposite: Option<impl FnOnce(&mut BfContext)>
     ) {
         self.add_to_var(&mut right.get_byte_ref(), Signedu8::from(1));
         self.add_to_var(&mut left.get_byte_ref(), Signedu8::from(1));
@@ -336,6 +346,9 @@ impl BfContext {
             ctx.set_var(&mut is_empty.get_byte_ref(), 2);
         });
         self.do_if_nonzero_mut(left.get_byte_ref(), code);
+        if let Some(other_code)=else_if_opposite{
+            self.do_if_nonzero_mut(right.get_byte_ref(), other_code);
+        }
         self.free_optional(is_empty);
         self.free_optional(is_not_empty);
     }
@@ -345,18 +358,7 @@ impl BfContext {
         right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
     ) {
-        let mut done = self.declare_byte();
-        self.set_var(&mut done.get_byte_ref(), 1);
-        self.do_if_left_greater_than_right(left, right, |ctx| {
-            ctx.add_to_var(
-                &mut done.get_byte_ref(),
-                Signedu8 {
-                    negative: true,
-                    value: 1,
-                },
-            );
-        });
-        self.do_if_nonzero_mut(done.get_byte_ref(), code);
+        self.do_if_left_greater_than_right(right, left, code);
     }
     pub fn do_if_equal(
         &mut self,
