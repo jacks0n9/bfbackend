@@ -81,10 +81,11 @@ impl BfContext {
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
-        let diff_from_needed = rounded_squared.abs_diff(to_add.value.into()) as usize;
+        let as_i16:i16=to_add.into();
+        let diff_from_needed = rounded_squared.abs_diff(as_i16.into()) as usize;
         if diff_from_needed != 0 {
             self.point_add(byte_to_set.data_index + 1);
-            let extra = if (rounded_squared) < to_add.value.into() {
+            let extra = if (rounded_squared) < as_i16.into() {
                 "+"
             } else {
                 "-"
