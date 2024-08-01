@@ -577,6 +577,16 @@ impl BfContext {
             ctx.move_byte(&mut temp_output.get_byte_ref(), output);
         });
     }
+    pub fn in_place_add<'a,T>(&mut self,byte_to_set: &mut MutableByteRef<'a, T>,to_add: Signedu8)where MutableByteRef<'a, T>: MarkSet{
+        self.point(byte_to_set.pointer);
+        let to_repeat=if to_add.negative{
+            "-"
+        }else{
+            "+"
+        };
+        self.write_code(&to_repeat.repeat(to_add.value.into()));
+        byte_to_set.mark_set();
+    }
 }
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
