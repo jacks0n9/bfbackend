@@ -816,7 +816,7 @@ impl MemoryRange {
 #[derive(Clone, Copy)]
 pub struct Signedu8 {
     pub negative: bool,
-    value: u8,
+    pub value: u8,
 }
 
 impl Signedu8 {
