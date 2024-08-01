@@ -59,7 +59,7 @@ impl BfContext {
             },
         )
     }
-    pub fn add_to_var<'a, T>(&mut self, to_add: Signedu8, byte_to_set: &mut MutableByteRef<'a, T>)
+    pub fn add_to_var<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, to_add: Signedu8)
     where
         ByteRef<'a, T>: MarkSet,
     {
@@ -107,11 +107,11 @@ impl BfContext {
             self.write_code("[-]");
         }
         self.add_to_var(
+            byte_to_set,
             Signedu8 {
                 negative: false,
                 value,
             },
-            byte_to_set,
         )
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
@@ -200,16 +200,13 @@ impl BfContext {
     /// One byte is reserved for the null byte and the other byte is for an empty byte at the start used for navigating the string efficiently
     /// String will be null-terminated, but data after the null-byte is not guaranteed to be zero, even if it is within the limits of the variable
     pub fn read_string(&mut self, store_to: &mut Variable<ArrayData>) {
-        self.point((store_to.pointer.start+store_to.pointer.offset)-1);
+        self.point((store_to.pointer.start + store_to.pointer.offset) - 1);
         self.write_code("-");
         self.point(store_to.pointer.start);
         // fill up cells with ones and return to store_to.pointer.start
         self.write_code(">+[>+]<[<]");
         // read cells until we encounter null byte
         self.write_code(">[,>]<[<]");
-
-
-
     }
     //>[[-<+>]>] to shift all cells over
     /// Read the data len of the array-1 characters. If your interpreter doesn't ask for input during execution, this will hang if not given enough characters
@@ -293,43 +290,43 @@ impl BfContext {
         mut right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext),
     ) {
-        self.add_to_var(Signedu8::from(1), &mut right.get_byte_ref());
-        self.add_to_var(Signedu8::from(1), &mut left.get_byte_ref());
+        self.add_to_var(&mut right.get_byte_ref(), Signedu8::from(1));
+        self.add_to_var(&mut left.get_byte_ref(), Signedu8::from(1));
         let mut is_empty = self.declare_byte();
         let mut is_not_empty = self.declare_byte();
         self.set_var(&mut is_not_empty.get_byte_ref(), 1);
         self.set_var(&mut is_empty.get_byte_ref(), 2);
         self.loop_over_cell(is_not_empty.pointer.start + 1, |ctx| {
             ctx.add_to_var(
+                &mut left.get_byte_ref(),
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                &mut left.get_byte_ref(),
             );
             ctx.do_if_nonzero(&left, |ctx| {
                 ctx.add_to_var(
+                    &mut is_empty.get_byte_ref(),
                     Signedu8 {
                         negative: true,
                         value: 1,
                     },
-                    &mut is_empty.get_byte_ref(),
                 );
             });
             ctx.add_to_var(
+                &mut right.get_byte_ref(),
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                &mut right.get_byte_ref(),
             );
             ctx.do_if_nonzero(&right, |ctx| {
                 ctx.add_to_var(
+                    &mut is_empty.get_byte_ref(),
                     Signedu8 {
                         negative: true,
                         value: 1,
                     },
-                    &mut is_empty.get_byte_ref(),
                 );
             });
             ctx.do_if_nonzero_mut(is_empty.get_byte_ref(), |ctx| {
@@ -351,11 +348,11 @@ impl BfContext {
         self.set_var(&mut done.get_byte_ref(), 1);
         self.do_if_left_greater_than_right(left, right, |ctx| {
             ctx.add_to_var(
+                &mut done.get_byte_ref(),
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                &mut done.get_byte_ref(),
             );
         });
         self.do_if_nonzero_mut(done.get_byte_ref(), code);
@@ -453,7 +450,7 @@ impl BfContext {
     }
     pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
         let mut to_invert = self.declare_byte();
-        self.add_to_var(Signedu8::from(1), &mut to_invert.get_byte_ref());
+        self.add_to_var(&mut to_invert.get_byte_ref(), Signedu8::from(1));
         self.do_if_nonzero(var, |ctx| {
             ctx.point(to_invert.pointer.start + 1);
             ctx.write_code("-");
@@ -497,11 +494,11 @@ impl BfContext {
         self.loop_over_cell(num2.pointer, |ctx| {
             // subtract one from num2 because we are looping over it
             ctx.add_to_var(
+                num2,
                 Signedu8 {
                     negative: true,
                     value: 1,
                 },
-                num2,
             );
             let temp_range = ctx.reserve(1);
             // temp var to store copy of num1
@@ -511,8 +508,8 @@ impl BfContext {
             ctx.loop_over_cell(temp, |ctx| {
                 ctx.point(temp);
                 ctx.write_code("-");
-                ctx.add_to_var(Signedu8::from(1), num1);
-                ctx.add_to_var(Signedu8::from(1), output);
+                ctx.add_to_var(num1, Signedu8::from(1));
+                ctx.add_to_var(output, Signedu8::from(1));
             });
             ctx.free_optional(temp_range);
         })
@@ -552,38 +549,64 @@ impl BfContext {
         self.set_var(&mut var.get_byte_ref(), value);
         var
     }
-    pub fn null_terminated_array_iter(&mut self,array: Variable<ArrayData>,for_each: impl FnOnce(&mut BfContext)){
+    pub fn null_terminated_array_iter(
+        &mut self,
+        array: Variable<ArrayData>,
+        for_each: impl FnOnce(&mut BfContext),
+    ) {
         self.point(array.pointer.start);
         self.write_code("[-]");
         self.point_add(1);
         self.write_code("[");
         for_each(self);
-        self.point(array.pointer.start+1);
+        self.point(array.pointer.start + 1);
         self.write_code(">]");
         self.write_code("<[<]");
-        self.pointer=array.pointer.start;
+        self.pointer = array.pointer.start;
     }
-    pub fn pow<'a,'b,'c,A,B,C>(&mut self,base: &mut ByteRef<'a,A>,exponent: &mut MutableByteRef<'b,B>,output: &mut MutableByteRef<'c, C>)where MutableByteRef<'a,A>:MarkSet, MutableByteRef<'b,B>: MarkSet,MutableByteRef<'c,C>: MarkSet{
+    pub fn pow<'a, 'b, 'c, A, B, C>(
+        &mut self,
+        base: &mut ByteRef<'a, A>,
+        exponent: &mut MutableByteRef<'b, B>,
+        output: &mut MutableByteRef<'c, C>,
+    ) where
+        MutableByteRef<'a, A>: MarkSet,
+        MutableByteRef<'b, B>: MarkSet,
+        MutableByteRef<'c, C>: MarkSet,
+    {
         self.point(output.pointer);
         self.write_code("+");
-        self.loop_over_cell(exponent.pointer, |ctx|{
-            ctx.add_to_var(Signedu8{negative: true,value:1}, exponent);
-            let mut temp_output=ctx.declare_byte();
-            let mut cloned_base=ctx.declare_byte();
-            ctx.clone_cell(base.pointer, cloned_base.pointer.start+1, cloned_base.pointer.start);
-            ctx.multiply(output, &mut cloned_base.get_byte_ref(), &mut temp_output.get_byte_ref());
+        self.loop_over_cell(exponent.pointer, |ctx| {
+            ctx.add_to_var(
+                exponent,
+                Signedu8 {
+                    negative: true,
+                    value: 1,
+                },
+            );
+            let mut temp_output = ctx.declare_byte();
+            let mut cloned_base = ctx.declare_byte();
+            ctx.clone_cell(
+                base.pointer,
+                cloned_base.pointer.start + 1,
+                cloned_base.pointer.start,
+            );
+            ctx.multiply(
+                output,
+                &mut cloned_base.get_byte_ref(),
+                &mut temp_output.get_byte_ref(),
+            );
             ctx.point(output.pointer);
             ctx.write_code("[-]");
             ctx.move_byte(&mut temp_output.get_byte_ref(), output);
         });
     }
-    pub fn in_place_add<'a,T>(&mut self,byte_to_set: &mut MutableByteRef<'a, T>,to_add: Signedu8)where MutableByteRef<'a, T>: MarkSet{
+    pub fn in_place_add<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, to_add: Signedu8)
+    where
+        MutableByteRef<'a, T>: MarkSet,
+    {
         self.point(byte_to_set.pointer);
-        let to_repeat=if to_add.negative{
-            "-"
-        }else{
-            "+"
-        };
+        let to_repeat = if to_add.negative { "-" } else { "+" };
         self.write_code(&to_repeat.repeat(to_add.value.into()));
         byte_to_set.mark_set();
     }
@@ -631,11 +654,11 @@ impl<'a> MatchBuilder<'a> {
             let to_subtract = num.abs_diff(subtracted);
             println!("{to_subtract}");
             self.ctx.add_to_var(
+                &mut self.var.get_byte_ref(),
                 Signedu8 {
                     negative: true,
                     value: to_subtract,
                 },
-                &mut self.var.get_byte_ref(),
             );
             self.ctx.point(self.var.pointer.start);
             self.ctx.write_code(&code);
@@ -789,7 +812,7 @@ mod test {
         let mut testing = ctx.declare_byte();
         let mut byte_ref = testing.get_byte_ref();
         let pointer = byte_ref.pointer;
-        ctx.add_to_var(Signedu8::from(value), &mut byte_ref);
+        ctx.add_to_var(&mut byte_ref, Signedu8::from(value));
         let code = ctx.code;
         let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
@@ -809,11 +832,11 @@ mod test {
             ctx.point(testing.pointer.start + 1);
             ctx.write_code("-");
             ctx.add_to_var(
+                &mut testing.get_byte_ref(),
                 Signedu8 {
                     negative: true,
                     value: i,
                 },
-                &mut testing.get_byte_ref(),
             );
             println!("{i}={}", &ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -841,7 +864,7 @@ mod test {
         let mut byte_ref = is_good.get_byte_ref();
         let pointer = byte_ref.pointer;
         ctx.do_if_equal(&var1, &var2, |ctx| {
-            ctx.add_to_var(Signedu8::from(value), &mut byte_ref);
+            ctx.add_to_var(&mut byte_ref, Signedu8::from(value));
         });
         println!("{}", &ctx.code);
         let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
@@ -944,7 +967,7 @@ mod test {
             for num in test_value.0 {
                 if *num == correct {
                     matching = matching.case(*num, |ctx| {
-                        ctx.add_to_var(to_set_to.into(), &mut should_set.get_byte_ref());
+                        ctx.add_to_var(&mut should_set.get_byte_ref(), to_set_to.into());
                     });
                 } else {
                     matching = matching.case(*num, |_ctx| {});
@@ -984,7 +1007,7 @@ mod test {
     #[test]
     fn multiply() {
         for first in 0..8 {
-            for second in 0..(255/first.max(1)) {
+            for second in 0..(255 / first.max(1)) {
                 let mut ctx = BfContext::default();
                 let mut first_var = ctx.declare_and_set_byte(first);
                 let mut second_var = ctx.declare_and_set_byte(second);
@@ -1001,23 +1024,27 @@ mod test {
         }
     }
     #[test]
-    fn pow(){
-        for base in 1_u8..=255{
-            let floored=256.0_f64.log(base as f64).floor() as u8;
-            for pow in 1..floored{
+    fn pow() {
+        for base in 1_u8..=255 {
+            let floored = 256.0_f64.log(base as f64).floor() as u8;
+            for pow in 1..floored {
                 let mut ctx = BfContext::default();
-                let mut base_var=ctx.declare_and_set_byte(base);
-                let mut pow_var=ctx.declare_and_set_byte(pow);
-                let mut output=ctx.declare_byte();
-                ctx.pow(&mut base_var.get_byte_ref(), &mut pow_var.get_byte_ref(), &mut output.get_byte_ref());
+                let mut base_var = ctx.declare_and_set_byte(base);
+                let mut pow_var = ctx.declare_and_set_byte(pow);
+                let mut output = ctx.declare_byte();
+                ctx.pow(
+                    &mut base_var.get_byte_ref(),
+                    &mut pow_var.get_byte_ref(),
+                    &mut output.get_byte_ref(),
+                );
                 println!("{}", ctx.code);
                 let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 println!("{base}^{pow}");
-                assert_eq!(run.cells[output.pointer.start+1],base.pow(pow.into()));
+                assert_eq!(run.cells[output.pointer.start + 1], base.pow(pow.into()));
                 break;
             }
-            break
+            break;
         }
     }
 

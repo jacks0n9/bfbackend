@@ -52,11 +52,13 @@ impl BfInterpreter {
                     if self.memory_pointer >= self.cells.len() {
                         return Err(BfError::CellPointerOutOfRange);
                     }
-                },
+                }
                 BfInstruction::PointLeft => {
-                    self.memory_pointer = self.memory_pointer.checked_sub(1)
+                    self.memory_pointer = self
+                        .memory_pointer
+                        .checked_sub(1)
                         .ok_or(BfError::CellPointerOutOfRange)?;
-                },
+                }
                 BfInstruction::StartLoop => {
                     if *current_cell == 0 {
                         let mut open_brackets = 1;
@@ -66,36 +68,40 @@ impl BfInterpreter {
                                 Some(BfInstruction::StartLoop) => open_brackets += 1,
                                 Some(BfInstruction::EndLoop) => open_brackets -= 1,
                                 None => return Err(BfError::MismatchedBracketsError),
-                                _ => {},
+                                _ => {}
                             }
                         }
                     } else {
                         loop_starts.push(self.code_pointer);
                     }
-                },
+                }
                 BfInstruction::EndLoop => {
                     if *current_cell != 0 {
                         match loop_starts.last() {
                             Some(&start) => {
                                 self.code_pointer = start;
-                            },
+                            }
                             None => return Err(BfError::MismatchedBracketsError),
                         }
                     } else {
                         loop_starts.pop();
                     }
-                },
+                }
                 BfInstruction::Output => {
-                    output.write_all(&[*current_cell]).map_err(BfError::IoError)?;
-                },
+                    output
+                        .write_all(&[*current_cell])
+                        .map_err(BfError::IoError)?;
+                }
                 BfInstruction::Input => {
                     let mut to_read_to = [0];
                     match input.read_exact(&mut to_read_to) {
                         Ok(()) => *current_cell = to_read_to[0],
-                        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => *current_cell = 0,
+                        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                            *current_cell = 0
+                        }
                         Err(e) => return Err(BfError::IoError(e)),
                     }
-                },
+                }
             }
             self.code_pointer += 1;
         }
