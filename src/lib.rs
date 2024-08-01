@@ -850,21 +850,26 @@ impl From<u8> for Signedu8 {
 #[cfg(test)]
 mod test {
     use super::*;
-    fn add_value(value: u8) {
+    fn add_value(value: u8,negative:bool) {
         let mut ctx = BfContext::default();
         let mut testing = ctx.declare_byte();
         let mut byte_ref = testing.get_byte_ref();
         let pointer = byte_ref.pointer;
-        ctx.add_to_var(&mut byte_ref, Signedu8::from(value));
+        ctx.add_to_var(&mut byte_ref, Signedu8{value,negative});
         let code = ctx.code;
         let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
-        assert_eq!(run.cells[pointer], value);
+        let mut should_be=value;
+        if negative{
+            should_be=0_u8.wrapping_sub(value);
+        }
+        assert_eq!(run.cells[pointer], should_be);
     }
     #[test]
     fn add() {
         for i in 0..=255 {
-            add_value(i)
+            add_value(i,false);
+            add_value(i,true)
         }
     }
     #[test]
