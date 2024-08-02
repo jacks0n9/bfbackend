@@ -531,8 +531,8 @@ impl BfContext {
     {
         if destroy_num1 {
             self.loop_over_cell(num1.pointer, |ctx| {
-                ctx.add_to_var(
-                    num1,
+                ctx.in_place_add_cell(
+                    num1.pointer,
                     Signedu8 {
                         value: 1,
                         negative: true,
