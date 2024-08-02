@@ -134,10 +134,10 @@ impl BfContext {
             self.write_code(&"+".repeat(remainder.into()));
         }
     }
-    fn write_code(&mut self, code: &str) {
+    pub fn write_code(&mut self, code: &str) {
         self.code += code
     }
-    fn point_add(&mut self, add: usize) {
+    pub fn point_add(&mut self, add: usize) {
         self.point(self.pointer + add)
     }
     fn point_sub(&mut self, sub: usize) {
@@ -152,7 +152,7 @@ impl BfContext {
         self.write_code("]");
         self.must_free -= 1;
     }
-    fn point<T: Pointable>(&mut self, location: T) {
+    pub fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_location();
         let diff = location.abs_diff(self.pointer);
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
@@ -791,7 +791,7 @@ impl Variable<ArrayData> {
         }
     }
 }
-trait Pointable {
+pub trait Pointable {
     fn get_location(&self) -> usize;
 }
 impl Pointable for usize {
