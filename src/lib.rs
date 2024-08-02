@@ -1132,9 +1132,7 @@ mod test {
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 println!("{base}^{pow}");
                 assert_eq!(run.cells[output.pointer.start + 1], base.pow(pow.into()));
-                break;
             }
-            break;
         }
     }
     #[test]
