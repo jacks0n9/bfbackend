@@ -440,9 +440,9 @@ impl BfContext {
         self.write_code("[-]");
     }
     /// Same as do_if_nonzero, but generates less code by mutating the byte you are checking
-    pub fn do_if_nonzero_mut<'a, T>(
+    pub fn do_if_nonzero_mut<T>(
         &mut self,
-        byte_to_check: MutableByteRef<'a, T>,
+        byte_to_check: MutableByteRef<'_, T>,
         code: impl FnOnce(&mut BfContext),
     ) {
         self.loop_over_cell(byte_to_check.pointer, |ctx| {
@@ -691,7 +691,7 @@ impl<T> GetRange for Variable<T> {
 }
 impl GetRange for MemoryRange {
     fn get_range(&self) -> MemoryRange {
-        self.clone()
+        *self
     }
 }
 
