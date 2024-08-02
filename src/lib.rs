@@ -101,7 +101,7 @@ impl BfContext {
     }
     pub fn set_var<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, value: u8)
     where
-        ByteRef<'a, T>: HasBeenSet + GetPointer + MarkSet,
+        ByteRef<'a, T>: HasBeenSet + Pointable + MarkSet,
     {
         if byte_to_set.has_been_set() {
             self.point(byte_to_set.get_pointer());
@@ -153,7 +153,7 @@ impl BfContext {
         self.must_free -= 1;
     }
     pub fn point<T: Pointable>(&mut self, location: T) {
-        let location = location.get_location();
+        let location = location.get_pointer();
         let diff = location.abs_diff(self.pointer);
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
         self.pointer = location
@@ -738,7 +738,7 @@ impl<'a> MatchBuilder<'a> {
     }
 }
 impl<T> Pointable for ByteRef<'_, T> {
-    fn get_location(&self) -> usize {
+    fn get_pointer(&self) -> usize {
         self.pointer
     }
 }
@@ -754,14 +754,6 @@ pub trait MarkSet {
 }
 pub trait HasBeenSet {
     fn has_been_set(&self) -> bool;
-}
-pub trait GetPointer {
-    fn get_pointer(&self) -> usize;
-}
-impl<T> GetPointer for ByteRef<'_, T> {
-    fn get_pointer(&self) -> usize {
-        self.pointer
-    }
 }
 
 impl HasBeenSet for ByteRef<'_, ByteData> {
@@ -818,15 +810,15 @@ impl Variable<ArrayData> {
     }
 }
 pub trait Pointable {
-    fn get_location(&self) -> usize;
+    fn get_pointer(&self) -> usize;
 }
 impl Pointable for usize {
-    fn get_location(&self) -> usize {
+    fn get_pointer(&self) -> usize {
         *self
     }
 }
 impl<T> Pointable for &Variable<T> {
-    fn get_location(&self) -> usize {
+    fn get_pointer(&self) -> usize {
         self.pointer.start
     }
 }
