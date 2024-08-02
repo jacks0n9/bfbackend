@@ -655,6 +655,32 @@ impl BfContext {
         let to_repeat = if to_add.negative { "-" } else { "+" };
         self.write_code(&to_repeat.repeat(to_add.value.into()));
     }
+    pub fn display_byte_as_decimal(&mut self,byte: Variable<ByteData>){
+        let hundred=self.declare_and_set_byte(100);
+        let mut result=self.divide(byte, hundred);
+        let mut result_cloned=self.clone_var(&result.quotient);
+        let mut first_was_zero=self.declare_byte();
+        self.do_if_nonzero_mut(result_cloned.get_byte_ref(), |ctx|{
+            ctx.add_to_var(&mut result.quotient.get_byte_ref(), Signedu8::from(48));
+            ctx.point(result.quotient.get_byte_ref().pointer);
+            ctx.write_code(".");
+            ctx.in_place_add(&mut first_was_zero.get_byte_ref(), Signedu8::from(1));
+        });
+        let ten=self.declare_and_set_byte(10);
+        let mut tens_result=self.divide(result.remainder, ten);
+        let mut tens_result_cloned=self.clone_var(&tens_result.quotient);
+        self.add_to_var(&mut tens_result.quotient.get_byte_ref(), Signedu8::from(48));
+        self.do_if_nonzero_mut(tens_result_cloned.get_byte_ref(),|ctx|{
+            ctx.in_place_add(&mut first_was_zero.get_byte_ref(), Signedu8::from(1));
+        });
+        self.do_if_nonzero_mut(first_was_zero.get_byte_ref(), |ctx|{
+            ctx.point(tens_result.quotient.get_byte_ref().pointer);
+            ctx.write_code(".");
+        });
+        self.point(tens_result.remainder.get_byte_ref().pointer);
+        self.add_to_var(&mut tens_result.remainder.get_byte_ref(), Signedu8::from(48));
+        self.write_code(".");
+    }
 }
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
@@ -1118,6 +1144,19 @@ mod test {
                 break;
             }
             break;
+        }
+    }
+    #[test]
+    fn display_byte_as_decimal(){
+        for num in 0..=255_u8{
+            let mut ctx=BfContext::default();
+            let var=ctx.declare_and_set_byte(num);
+            ctx.display_byte_as_decimal(var);
+            println!("{}",ctx.code);
+            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            let mut out: Vec<u8> = Vec::new();
+            run.run(&mut out,&mut BlankIO).unwrap();
+            assert_eq!(out,format!("{num}").as_bytes());
         }
     }
 
