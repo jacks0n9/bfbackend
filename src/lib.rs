@@ -191,10 +191,9 @@ impl BfContext {
         // return to loop pointer
         self.write_code("<[<]")
     }
-    pub fn read_char<'a, T: MarkSet + Into<ByteRef<'a, G>>, G: 'a>(&mut self, mut store_to: T) {
+    pub fn read_char<'a, T>(&mut self, mut store_to: ByteRef<'a, T>) where ByteRef<'a, T>: MarkSet{
         store_to.mark_set();
-        let as_byte_ref = store_to.into();
-        self.point(as_byte_ref.pointer);
+        self.point(store_to.pointer);
         self.write_code(",")
     }
     /// Reads until a null byte or max capacity of the store_to variable, which is its pointers offset minus 2.
