@@ -115,7 +115,7 @@ impl BfContext {
             },
         )
     }
-    pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
+    pub fn set_array(&mut self, var: &mut Variable<ArrayData>, values: &[u8]) {
         let signed: Vec<_> =values.iter().map(|num|Signedu8{value: *num,negative:false}).collect();
         for cell in var.var_data.set_cells.iter().copied(){
             self.point(var.pointer.start+1+cell);
@@ -1002,7 +1002,7 @@ mod test {
             let mut ctx = BfContext::default();
             let mut testing_array = ctx.declare_array(i.into());
             let test_values: Vec<u8> = (1..=i).collect();
-            ctx.set_array(&test_values, &mut testing_array);
+            ctx.set_array( &mut testing_array,&test_values);
             println!("{}",ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
