@@ -116,23 +116,12 @@ impl BfContext {
         )
     }
     pub fn set_array(&mut self, values: &[u8], var: &mut Variable<ArrayData>) {
-        let average_sqrt = ((values.iter().map(|num| (*num as f64).sqrt()).sum::<f64>())
-            / values.len() as f64) as u8;
-        let divided = values.iter().map(|num| num / average_sqrt);
-        let remainders = values.iter().map(|num| num % average_sqrt);
-        self.point(&*var);
-        self.write_code(&"+".repeat(average_sqrt.into()));
-        self.loop_over_cell(var.pointer.start, |ctx| {
-            ctx.write_code("-");
-            for factor in divided {
-                ctx.point_add(1);
-                ctx.write_code(&"+".repeat(factor.into()));
-            }
-        });
-        for remainder in remainders {
-            self.point_add(1);
-            self.write_code(&"+".repeat(remainder.into()));
+        let signed: Vec<_> =values.iter().map(|num|Signedu8{value: *num,negative:false}).collect();
+        for cell in var.var_data.set_cells.iter().copied(){
+            self.point(var.pointer.start+1+cell);
+            self.write_code("[-]");
         }
+        self.transform_array(var, &signed);
     }
     pub fn write_code(&mut self, code: &str) {
         self.code += code
@@ -680,6 +669,26 @@ impl BfContext {
         self.add_to_var(&mut tens_result.remainder.get_byte_ref(), Signedu8::from(48));
         self.write_code(".");
     }
+    pub fn transform_array(&mut self,to_change: &mut Variable<ArrayData>,changes: &[Signedu8]){
+        let average_sqrt = ((changes.iter().map(|num| (num.value as f64).sqrt()).sum::<f64>())
+            / changes.len() as f64) as u8;
+        let divided = changes.iter().map(|num| Signedu8{value: num.value / average_sqrt, negative: num.negative});
+        let remainders = changes.iter().map(|num| Signedu8{value: num.value % average_sqrt, negative:num.negative});
+        self.in_place_add_cell(to_change.pointer.start,average_sqrt.into());
+        self.loop_over_cell(to_change.pointer.start, |ctx|{
+            ctx.write_code("-");
+            for (i,factor) in divided.enumerate() {
+                let pointer=to_change.pointer.start+1+i;
+                ctx.in_place_add_cell(pointer, factor)
+            }
+        });
+        for (i,remainder) in remainders.enumerate() {
+            self.in_place_add_cell(to_change.pointer.start+1+i,remainder)
+        }
+        for i in 0..changes.len(){
+            to_change.var_data.set_cells.push(i);
+        }
+    }
 }
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
@@ -994,6 +1003,7 @@ mod test {
             let mut testing_array = ctx.declare_array(i.into());
             let test_values: Vec<u8> = (1..=i).collect();
             ctx.set_array(&test_values, &mut testing_array);
+            println!("{}",ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(
