@@ -10,7 +10,7 @@ pub struct BfContext<State> {
     pointer: usize,
     must_free: usize,
 }
-#[derive(Clone,Default)]
+#[derive(Clone, Default)]
 pub struct NormalState;
 impl BfContext<NormalState> {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
@@ -83,7 +83,7 @@ impl BfContext<NormalState> {
         );
         self.write_code(&square_loop);
         let rounded_squared = (rounded as i32).pow(2) * to_add.signum() as i32;
-        let as_i16:i16=to_add.into();
+        let as_i16: i16 = to_add.into();
         let diff_from_needed = rounded_squared.abs_diff(as_i16.into()) as usize;
         if diff_from_needed != 0 {
             self.point_add(byte_to_set.data_index + 1);
@@ -118,9 +118,15 @@ impl BfContext<NormalState> {
         )
     }
     pub fn set_array(&mut self, var: &mut Variable<ArrayData>, values: &[u8]) {
-        let signed: Vec<_> =values.iter().map(|num|Signedu8{value: *num,negative:false}).collect();
-        for cell in var.var_data.set_cells.iter().copied(){
-            self.point(var.pointer.start+1+cell);
+        let signed: Vec<_> = values
+            .iter()
+            .map(|num| Signedu8 {
+                value: *num,
+                negative: false,
+            })
+            .collect();
+        for cell in var.var_data.set_cells.iter().copied() {
+            self.point(var.pointer.start + 1 + cell);
             self.write_code("[-]");
         }
         self.transform_array(var, &signed);
@@ -134,7 +140,11 @@ impl BfContext<NormalState> {
     fn point_sub(&mut self, sub: usize) {
         self.point(self.pointer - sub)
     }
-    pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext<NormalState>)) {
+    pub fn loop_over_cell(
+        &mut self,
+        to_loop_over: usize,
+        code: impl FnOnce(&mut BfContext<NormalState>),
+    ) {
         self.point(to_loop_over);
         self.must_free += 1;
         self.write_code("[");
@@ -182,7 +192,10 @@ impl BfContext<NormalState> {
         // return to loop pointer
         self.write_code("<[<]")
     }
-    pub fn read_char<'a, T>(&mut self, mut store_to: ByteRef<'a, T>) where ByteRef<'a, T>: MarkSet{
+    pub fn read_char<'a, T>(&mut self, mut store_to: ByteRef<'a, T>)
+    where
+        ByteRef<'a, T>: MarkSet,
+    {
         store_to.mark_set();
         self.point(store_to.pointer);
         self.write_code(",")
@@ -279,9 +292,9 @@ impl BfContext<NormalState> {
         &mut self,
         left: Variable<ByteData>,
         right: Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext<NormalState>)
-    ){
-        let no_else: Option<fn(&mut BfContext<NormalState>)>=None;
+        code: impl FnOnce(&mut BfContext<NormalState>),
+    ) {
+        let no_else: Option<fn(&mut BfContext<NormalState>)> = None;
         self.do_if_left_greater_than_right_with_else(left, right, code, no_else)
     }
     pub fn do_if_left_greater_than_right_with_else(
@@ -289,7 +302,7 @@ impl BfContext<NormalState> {
         mut left: Variable<ByteData>,
         mut right: Variable<ByteData>,
         code: impl FnOnce(&mut BfContext<NormalState>),
-        else_if_opposite: Option<impl FnOnce(&mut BfContext<NormalState>)>
+        else_if_opposite: Option<impl FnOnce(&mut BfContext<NormalState>)>,
     ) {
         self.add_to_var(&mut right.get_byte_ref(), Signedu8::from(1));
         self.add_to_var(&mut left.get_byte_ref(), Signedu8::from(1));
@@ -336,7 +349,7 @@ impl BfContext<NormalState> {
             ctx.set_var(&mut is_empty.get_byte_ref(), 2);
         });
         self.do_if_nonzero_mut(left.get_byte_ref(), code);
-        if let Some(other_code)=else_if_opposite{
+        if let Some(other_code) = else_if_opposite {
             self.do_if_nonzero_mut(right.get_byte_ref(), other_code);
         }
         self.free_optional(is_empty);
@@ -412,7 +425,11 @@ impl BfContext<NormalState> {
     /// Execute code if the variable's data is non-zero
     /// This requires a &Variable<ByteData> to be passed in rather than a ByteRef
     /// This is because this code is dependent on there being an extra cell directly to the left of the variable being checked
-    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext<NormalState>)) {
+    pub fn do_if_nonzero(
+        &mut self,
+        var: &Variable<ByteData>,
+        code: impl FnOnce(&mut BfContext<NormalState>),
+    ) {
         let zero_cell = self.declare_byte();
         self.point(var.pointer.start);
         self.write_code("+");
@@ -441,7 +458,11 @@ impl BfContext<NormalState> {
             code(ctx)
         })
     }
-    pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext<NormalState>)) {
+    pub fn do_if_zero(
+        &mut self,
+        var: &Variable<ByteData>,
+        code: impl FnOnce(&mut BfContext<NormalState>),
+    ) {
         let mut to_invert = self.declare_byte();
         self.add_to_var(&mut to_invert.get_byte_ref(), Signedu8::from(1));
         self.do_if_nonzero(var, |ctx| {
@@ -645,49 +666,61 @@ impl BfContext<NormalState> {
         let to_repeat = if to_add.negative { "-" } else { "+" };
         self.write_code(&to_repeat.repeat(to_add.value.into()));
     }
-    pub fn display_byte_as_decimal(&mut self,byte: Variable<ByteData>){
-        let hundred=self.declare_and_set_byte(100);
-        let mut result=self.divide(byte, hundred);
-        let mut result_cloned=self.clone_var(&result.quotient);
-        let mut first_was_zero=self.declare_byte();
-        self.do_if_nonzero_mut(result_cloned.get_byte_ref(), |ctx|{
+    pub fn display_byte_as_decimal(&mut self, byte: Variable<ByteData>) {
+        let hundred = self.declare_and_set_byte(100);
+        let mut result = self.divide(byte, hundred);
+        let mut result_cloned = self.clone_var(&result.quotient);
+        let mut first_was_zero = self.declare_byte();
+        self.do_if_nonzero_mut(result_cloned.get_byte_ref(), |ctx| {
             ctx.add_to_var(&mut result.quotient.get_byte_ref(), Signedu8::from(48));
             ctx.point(result.quotient.get_byte_ref().pointer);
             ctx.write_code(".");
             ctx.in_place_add(&mut first_was_zero.get_byte_ref(), Signedu8::from(1));
         });
-        let ten=self.declare_and_set_byte(10);
-        let mut tens_result=self.divide(result.remainder, ten);
-        let mut tens_result_cloned=self.clone_var(&tens_result.quotient);
+        let ten = self.declare_and_set_byte(10);
+        let mut tens_result = self.divide(result.remainder, ten);
+        let mut tens_result_cloned = self.clone_var(&tens_result.quotient);
         self.add_to_var(&mut tens_result.quotient.get_byte_ref(), Signedu8::from(48));
-        self.do_if_nonzero_mut(tens_result_cloned.get_byte_ref(),|ctx|{
+        self.do_if_nonzero_mut(tens_result_cloned.get_byte_ref(), |ctx| {
             ctx.in_place_add(&mut first_was_zero.get_byte_ref(), Signedu8::from(1));
         });
-        self.do_if_nonzero_mut(first_was_zero.get_byte_ref(), |ctx|{
+        self.do_if_nonzero_mut(first_was_zero.get_byte_ref(), |ctx| {
             ctx.point(tens_result.quotient.get_byte_ref().pointer);
             ctx.write_code(".");
         });
         self.point(tens_result.remainder.get_byte_ref().pointer);
-        self.add_to_var(&mut tens_result.remainder.get_byte_ref(), Signedu8::from(48));
+        self.add_to_var(
+            &mut tens_result.remainder.get_byte_ref(),
+            Signedu8::from(48),
+        );
         self.write_code(".");
     }
-    pub fn transform_array(&mut self,to_change: &mut Variable<ArrayData>,changes: &[Signedu8]){
-        let average_sqrt = ((changes.iter().map(|num| (num.value as f64).sqrt()).sum::<f64>())
+    pub fn transform_array(&mut self, to_change: &mut Variable<ArrayData>, changes: &[Signedu8]) {
+        let average_sqrt = ((changes
+            .iter()
+            .map(|num| (num.value as f64).sqrt())
+            .sum::<f64>())
             / changes.len() as f64) as u8;
-        let divided = changes.iter().map(|num| Signedu8{value: num.value / average_sqrt, negative: num.negative});
-        let remainders = changes.iter().map(|num| Signedu8{value: num.value % average_sqrt, negative:num.negative});
-        self.in_place_add_cell(to_change.pointer.start,average_sqrt.into());
-        self.loop_over_cell(to_change.pointer.start, |ctx|{
+        let divided = changes.iter().map(|num| Signedu8 {
+            value: num.value / average_sqrt,
+            negative: num.negative,
+        });
+        let remainders = changes.iter().map(|num| Signedu8 {
+            value: num.value % average_sqrt,
+            negative: num.negative,
+        });
+        self.in_place_add_cell(to_change.pointer.start, average_sqrt.into());
+        self.loop_over_cell(to_change.pointer.start, |ctx| {
             ctx.write_code("-");
-            for (i,factor) in divided.enumerate() {
-                let pointer=to_change.pointer.start+1+i;
+            for (i, factor) in divided.enumerate() {
+                let pointer = to_change.pointer.start + 1 + i;
                 ctx.in_place_add_cell(pointer, factor)
             }
         });
-        for (i,remainder) in remainders.enumerate() {
-            self.in_place_add_cell(to_change.pointer.start+1+i,remainder)
+        for (i, remainder) in remainders.enumerate() {
+            self.in_place_add_cell(to_change.pointer.start + 1 + i, remainder)
         }
-        for i in 0..changes.len(){
+        for i in 0..changes.len() {
             to_change.var_data.set_cells.push(i);
         }
     }
@@ -880,26 +913,26 @@ impl From<u8> for Signedu8 {
 #[cfg(test)]
 mod test {
     use super::*;
-    fn add_value(value: u8,negative:bool) {
+    fn add_value(value: u8, negative: bool) {
         let mut ctx = BfContext::default();
         let mut testing = ctx.declare_byte();
         let mut byte_ref = testing.get_byte_ref();
         let pointer = byte_ref.pointer;
-        ctx.add_to_var(&mut byte_ref, Signedu8{value,negative});
+        ctx.add_to_var(&mut byte_ref, Signedu8 { value, negative });
         let code = ctx.code;
         let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
-        let mut should_be=value;
-        if negative{
-            should_be=0_u8.wrapping_sub(value);
+        let mut should_be = value;
+        if negative {
+            should_be = 0_u8.wrapping_sub(value);
         }
         assert_eq!(run.cells[pointer], should_be);
     }
     #[test]
     fn add() {
         for i in 0..=255 {
-            add_value(i,false);
-            add_value(i,true)
+            add_value(i, false);
+            add_value(i, true)
         }
     }
     #[test]
@@ -1004,8 +1037,8 @@ mod test {
             let mut ctx = BfContext::default();
             let mut testing_array = ctx.declare_array(i.into());
             let test_values: Vec<u8> = (1..=i).collect();
-            ctx.set_array( &mut testing_array,&test_values);
-            println!("{}",ctx.code);
+            ctx.set_array(&mut testing_array, &test_values);
+            println!("{}", ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(
@@ -1148,16 +1181,16 @@ mod test {
         }
     }
     #[test]
-    fn display_byte_as_decimal(){
-        for num in 0..=255_u8{
-            let mut ctx=BfContext::default();
-            let var=ctx.declare_and_set_byte(num);
+    fn display_byte_as_decimal() {
+        for num in 0..=255_u8 {
+            let mut ctx = BfContext::default();
+            let var = ctx.declare_and_set_byte(num);
             ctx.display_byte_as_decimal(var);
-            println!("{}",ctx.code);
+            println!("{}", ctx.code);
             let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
             let mut out: Vec<u8> = Vec::new();
-            run.run(&mut out,&mut BlankIO).unwrap();
-            assert_eq!(out,format!("{num}").as_bytes());
+            run.run(&mut out, &mut BlankIO).unwrap();
+            assert_eq!(out, format!("{num}").as_bytes());
         }
     }
 
