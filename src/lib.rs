@@ -1,16 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 mod interpreter;
 
 #[derive(Default, Clone)]
-pub struct BfContext {
+pub struct BfContext<State> {
+    state: PhantomData<State>,
     taken: Vec<MemoryRange>,
     pub code: String,
     pointer: usize,
     must_free: usize,
 }
-
-impl BfContext {
+#[derive(Clone,Default)]
+pub struct NormalState;
+impl BfContext<NormalState> {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
         let mut previous_end = 0;
         for range in &self.taken {
@@ -132,7 +134,7 @@ impl BfContext {
     fn point_sub(&mut self, sub: usize) {
         self.point(self.pointer - sub)
     }
-    pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext)) {
+    pub fn loop_over_cell(&mut self, to_loop_over: usize, code: impl FnOnce(&mut BfContext<NormalState>)) {
         self.point(to_loop_over);
         self.must_free += 1;
         self.write_code("[");
@@ -277,17 +279,17 @@ impl BfContext {
         &mut self,
         left: Variable<ByteData>,
         right: Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext)
+        code: impl FnOnce(&mut BfContext<NormalState>)
     ){
-        let no_else: Option<fn(&mut BfContext)>=None;
+        let no_else: Option<fn(&mut BfContext<NormalState>)>=None;
         self.do_if_left_greater_than_right_with_else(left, right, code, no_else)
     }
     pub fn do_if_left_greater_than_right_with_else(
         &mut self,
         mut left: Variable<ByteData>,
         mut right: Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext),
-        else_if_opposite: Option<impl FnOnce(&mut BfContext)>
+        code: impl FnOnce(&mut BfContext<NormalState>),
+        else_if_opposite: Option<impl FnOnce(&mut BfContext<NormalState>)>
     ) {
         self.add_to_var(&mut right.get_byte_ref(), Signedu8::from(1));
         self.add_to_var(&mut left.get_byte_ref(), Signedu8::from(1));
@@ -344,7 +346,7 @@ impl BfContext {
         &mut self,
         left: Variable<ByteData>,
         right: Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext),
+        code: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         self.do_if_left_greater_than_right(right, left, code);
     }
@@ -352,7 +354,7 @@ impl BfContext {
         &mut self,
         left: &Variable<ByteData>,
         right: &Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext),
+        code: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         let comparison_space: Variable<ArrayData> = self.declare_array(4);
         let left_temp = comparison_space.pointer.start + 1;
@@ -387,7 +389,7 @@ impl BfContext {
         &mut self,
         left: &Variable<ByteData>,
         right: &Variable<ByteData>,
-        code: impl FnOnce(&mut BfContext),
+        code: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         let comparison_space: Variable<ArrayData> = self.declare_array(2);
         let temp_cell = self.reserve(1);
@@ -410,7 +412,7 @@ impl BfContext {
     /// Execute code if the variable's data is non-zero
     /// This requires a &Variable<ByteData> to be passed in rather than a ByteRef
     /// This is because this code is dependent on there being an extra cell directly to the left of the variable being checked
-    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
+    pub fn do_if_nonzero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext<NormalState>)) {
         let zero_cell = self.declare_byte();
         self.point(var.pointer.start);
         self.write_code("+");
@@ -432,14 +434,14 @@ impl BfContext {
     pub fn do_if_nonzero_mut<T>(
         &mut self,
         byte_to_check: MutableByteRef<'_, T>,
-        code: impl FnOnce(&mut BfContext),
+        code: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         self.loop_over_cell(byte_to_check.pointer, |ctx| {
             ctx.write_code("[-]");
             code(ctx)
         })
     }
-    pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext)) {
+    pub fn do_if_zero(&mut self, var: &Variable<ByteData>, code: impl FnOnce(&mut BfContext<NormalState>)) {
         let mut to_invert = self.declare_byte();
         self.add_to_var(&mut to_invert.get_byte_ref(), Signedu8::from(1));
         self.do_if_nonzero(var, |ctx| {
@@ -582,7 +584,7 @@ impl BfContext {
     pub fn null_terminated_array_iter(
         &mut self,
         array: Variable<ArrayData>,
-        for_each: impl FnOnce(&mut BfContext),
+        for_each: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         self.point(array.pointer.start);
         self.write_code("[-]");
@@ -709,13 +711,13 @@ pub struct DivisionResult {
     pub remainder: Variable<ByteData>,
 }
 pub struct MatchBuilder<'a> {
-    ctx: &'a mut BfContext,
+    ctx: &'a mut BfContext<NormalState>,
     var: Variable<ByteData>,
     codes: HashMap<u8, String>,
 }
 
 impl<'a> MatchBuilder<'a> {
-    pub fn case(mut self, num: u8, to_do: impl FnOnce(&mut BfContext)) -> Self {
+    pub fn case(mut self, num: u8, to_do: impl FnOnce(&mut BfContext<NormalState>)) -> Self {
         let old = self.ctx.code.clone();
         self.ctx.do_if_zero(&self.var, to_do);
         let chars_added = self.ctx.code.len() - old.len();
@@ -1015,7 +1017,7 @@ mod test {
     }
     #[test]
     fn do_if_zero() {
-        let mut ctx: BfContext = BfContext::default();
+        let mut ctx = BfContext::default();
         let zero = ctx.declare_byte();
         let mut should_be_set = ctx.declare_byte();
         let value = 92;
@@ -1036,7 +1038,7 @@ mod test {
             (&[5], 0),
         ];
         for test_value in test_values {
-            let mut ctx: BfContext = BfContext::default();
+            let mut ctx = BfContext::default();
             let correct = test_value.0[test_value.1];
             let to_set = ctx.declare_and_set_byte(correct);
             let mut should_set = ctx.declare_byte();
@@ -1062,7 +1064,7 @@ mod test {
     fn divide() {
         for dividend in 1..12 {
             for divisor in 1..12 {
-                let mut ctx: BfContext = BfContext::default();
+                let mut ctx = BfContext::default();
                 let dividend_var = ctx.declare_and_set_byte(dividend);
                 let divisor_var = ctx.declare_and_set_byte(divisor);
                 let answer = ctx.divide(dividend_var, divisor_var);
