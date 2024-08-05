@@ -742,7 +742,7 @@ impl<T> BfContext<T>{
     pub fn drain_current_cell(&mut self){
         self.write_code("[-]");
     }
-    pub fn upgrade_to_normal(&mut self,known_location: Variable<SetVariableType>,to_do: impl FnOnce(&mut BfContext<NormalState>)){
+    pub fn upgrade_to_normal(&mut self,known_location: Variable<AllOnesType>,to_do: impl FnOnce(&mut BfContext<NormalState>)){
         let normal_pointer=self as *mut _ as *mut BfContext<NormalState>;
         let normal=unsafe{&mut *normal_pointer};
         let old_pointer=normal.pointer;
@@ -757,7 +757,7 @@ impl<T> BfContext<T>{
     }
 }
 // a type of variable that is all ones but ends with a zero and starts with a zero
-pub struct SetVariableType;
+pub struct AllOnesType;
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
 }
