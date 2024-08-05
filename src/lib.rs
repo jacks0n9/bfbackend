@@ -133,9 +133,6 @@ impl BfContext<NormalState> {
         }
         self.transform_array(var, &signed);
     }
-    pub fn write_code(&mut self, code: &str) {
-        self.code += code
-    }
     pub fn point_add(&mut self, add: usize) {
         self.point(self.pointer + add)
     }
@@ -607,15 +604,17 @@ impl BfContext<NormalState> {
     pub fn null_terminated_array_iter(
         &mut self,
         array: Variable<ArrayData>,
-        for_each: impl FnOnce(&mut BfContext<NormalState>),
+        for_each: impl FnOnce(&mut BfContext<PointerlessState>),
     ) {
         self.point(array.pointer.start);
         self.write_code("[-]");
         self.point_add(1);
+        let pointer=self as *mut _ as *mut BfContext<PointerlessState>;
+        let mut pointerless = unsafe{&mut *pointer};
         self.write_code("[");
-        for_each(self);
+        for_each(&mut pointerless);
         self.point(array.pointer.start + 1);
-        self.write_code(">]");
+        self.write_code("]");
         self.write_code("<[<]");
         self.pointer = array.pointer.start;
     }
@@ -665,8 +664,7 @@ impl BfContext<NormalState> {
     }
     fn in_place_add_cell(&mut self, cell: usize, to_add: Signedu8) {
         self.point(cell);
-        let to_repeat = if to_add.negative { "-" } else { "+" };
-        self.write_code(&to_repeat.repeat(to_add.value.into()));
+        self.in_place_add_current_cell(to_add);
     }
     pub fn display_byte_as_decimal(&mut self, byte: Variable<ByteData>) {
         let hundred = self.declare_and_set_byte(100);
@@ -727,6 +725,26 @@ impl BfContext<NormalState> {
         }
     }
 }
+impl<T> BfContext<T>{
+    pub fn write_code(&mut self, code: &str) {
+        self.code += code
+    }
+    pub fn in_place_add_current_cell(&mut self, to_add: Signedu8){
+        let to_repeat = if to_add.negative { "-" } else { "+" };
+        self.write_code(&to_repeat.repeat(to_add.value.into()));
+    }
+    pub fn display_current_cell(&mut self){
+        self.write_code(".");
+    }
+    pub fn input_current_cell(&mut self){
+        self.write_code(",");
+    }
+    pub fn drain_current_cell(&mut self){
+        self.write_code("[-]");
+    }
+}
+// a type of variable that is all ones but ends with a zero and starts with a zero
+pub struct SetVariableType;
 pub trait GetRange {
     fn get_range(&self) -> MemoryRange;
 }
