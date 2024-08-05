@@ -609,8 +609,8 @@ impl BfContext<NormalState> {
         self.point(array.pointer.start);
         self.write_code("[-]");
         self.point_add(1);
-        let pointer=self as *mut _ as *mut BfContext<PointerlessState>;
-        let mut pointerless = unsafe{&mut *pointer};
+        let pointer = self as *mut _ as *mut BfContext<PointerlessState>;
+        let mut pointerless = unsafe { &mut *pointer };
         self.write_code("[");
         for_each(&mut pointerless);
         self.point(array.pointer.start + 1);
@@ -724,36 +724,52 @@ impl BfContext<NormalState> {
             to_change.var_data.set_cells.push(i);
         }
     }
+    pub fn make_all_ones_var(&mut self, len: usize) -> Variable<AllOnesType> {
+        let memory = self.reserve(len + 2);
+        self.point((memory.start + memory.offset) - 1);
+        self.write_code("-");
+        self.point(memory.start + 1);
+        self.write_code("+[>+]<[<]");
+        self.pointer = memory.start;
+        Variable {
+            var_data: AllOnesType,
+            pointer: memory,
+        }
+    }
 }
-impl<T> BfContext<T>{
+impl<T> BfContext<T> {
     pub fn write_code(&mut self, code: &str) {
         self.code += code
     }
-    pub fn in_place_add_current_cell(&mut self, to_add: Signedu8){
+    pub fn in_place_add_current_cell(&mut self, to_add: Signedu8) {
         let to_repeat = if to_add.negative { "-" } else { "+" };
         self.write_code(&to_repeat.repeat(to_add.value.into()));
     }
-    pub fn display_current_cell(&mut self){
+    pub fn display_current_cell(&mut self) {
         self.write_code(".");
     }
-    pub fn input_current_cell(&mut self){
+    pub fn input_current_cell(&mut self) {
         self.write_code(",");
     }
-    pub fn drain_current_cell(&mut self){
+    pub fn drain_current_cell(&mut self) {
         self.write_code("[-]");
     }
-    pub fn upgrade_to_normal(&mut self,known_location: Variable<AllOnesType>,to_do: impl FnOnce(&mut BfContext<NormalState>)){
-        let normal_pointer=self as *mut _ as *mut BfContext<NormalState>;
-        let normal=unsafe{&mut *normal_pointer};
-        let old_pointer=normal.pointer;
-        normal.point(known_location.pointer.start+1);
+    pub fn upgrade_to_normal(
+        &mut self,
+        known_location: Variable<AllOnesType>,
+        to_do: impl FnOnce(&mut BfContext<NormalState>),
+    ) {
+        let normal_pointer = self as *mut _ as *mut BfContext<NormalState>;
+        let normal = unsafe { &mut *normal_pointer };
+        let old_pointer = normal.pointer;
+        normal.point(known_location.pointer.start + 1);
         normal.write_code("-");
         normal.write_code("<[<]");
-        normal.pointer=known_location.pointer.start;
+        normal.pointer = known_location.pointer.start;
         to_do(normal);
         normal.point(known_location.pointer.start);
         normal.write_code(">[>]");
-        normal.point(old_pointer-1);
+        normal.point(old_pointer - 1);
     }
 }
 // a type of variable that is all ones but ends with a zero and starts with a zero
