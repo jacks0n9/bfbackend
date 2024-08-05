@@ -12,6 +12,8 @@ pub struct BfContext<State> {
 }
 #[derive(Clone, Default)]
 pub struct NormalState;
+#[derive(Clone, Default)]
+pub struct PointerlessState;
 impl BfContext<NormalState> {
     fn reserve(&mut self, amount: usize) -> MemoryRange {
         let mut previous_end = 0;
