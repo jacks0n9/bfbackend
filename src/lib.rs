@@ -771,6 +771,25 @@ impl<T> BfContext<T> {
         normal.write_code(">[>]");
         normal.point(old_pointer - 1);
     }
+    pub fn build_code(self) -> String {
+        let to_remove = vec!["<>", "><", "+-", "-+"];
+        let mut optimized = self.code;
+        while contains_any(to_remove.clone(), &optimized) {
+            for item in &to_remove {
+                optimized = optimized.replace(item, "");
+            }
+        }
+        optimized
+    }
+}
+
+fn contains_any(set: Vec<&str>, to_check: &str) -> bool {
+    for item in set {
+        if to_check.contains(item) {
+            return true;
+        }
+    }
+    false
 }
 // a type of variable that is all ones but ends with a zero and starts with a zero
 pub struct AllOnesType;
@@ -967,7 +986,7 @@ mod test {
         let mut byte_ref = testing.get_byte_ref();
         let pointer = byte_ref.pointer;
         ctx.add_to_var(&mut byte_ref, Signedu8 { value, negative });
-        let code = ctx.code;
+        let code = ctx.build_code();
         let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         let mut should_be = value;
@@ -997,8 +1016,9 @@ mod test {
                     value: i,
                 },
             );
-            println!("{i}={}", &ctx.code);
-            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            let code = ctx.build_code();
+            println!("{i}={}", code);
+            let mut run = interpreter::BfInterpreter::new_with_code(code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(run.cells[testing.pointer.start + 1], 255 - i)
         }
@@ -1009,7 +1029,7 @@ mod test {
         let test_str = "The quick brown fox jumps over the lazy DOG1234567890";
         ctx.display_text(test_str);
         let mut writer: Vec<u8> = Vec::new();
-        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        let mut run = interpreter::BfInterpreter::new_with_code(ctx.build_code());
         run.run(&mut writer, &mut BlankIO).unwrap();
         assert_eq!(writer, test_str.as_bytes())
     }
@@ -1025,8 +1045,9 @@ mod test {
         ctx.do_if_equal(&var1, &var2, |ctx| {
             ctx.add_to_var(&mut byte_ref, Signedu8::from(value));
         });
-        println!("{}", &ctx.code);
-        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        let code = ctx.build_code();
+        println!("{}", code);
+        let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         println!("{pointer}");
         println!("{:?}", &run.cells[..20]);
@@ -1039,7 +1060,8 @@ mod test {
         let var1 = ctx.declare_and_set_byte(value);
         let var2 = ctx.declare_byte();
         ctx.move_cell(var1.pointer.start + 1, var2.pointer.start + 1);
-        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        let code = ctx.build_code();
+        let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         assert_eq!(run.cells[var1.pointer.start + 1], 0);
         assert_eq!(run.cells[var2.pointer.start + 1], value);
@@ -1066,8 +1088,9 @@ mod test {
             ctx.do_if_left_greater_than_right(left, right, |ctx| {
                 ctx.set_var(&mut should_be_set.get_byte_ref(), value);
             });
-            println!("{}", &ctx.code);
-            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            let code = ctx.build_code();
+            println!("{}", code);
+            let mut run = interpreter::BfInterpreter::new_with_code(code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             let what_cell_was_set_to = run.cells[should_be_set.pointer.start + 1];
             println!("test value: {},{}", test_value.0, test_value.1);
@@ -1086,8 +1109,9 @@ mod test {
             let mut testing_array = ctx.declare_array(i.into());
             let test_values: Vec<u8> = (1..=i).collect();
             ctx.set_array(&mut testing_array, &test_values);
-            println!("{}", ctx.code);
-            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            let code = ctx.build_code();
+            println!("{}", code);
+            let mut run = interpreter::BfInterpreter::new_with_code(code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(
                 run.cells
@@ -1105,7 +1129,8 @@ mod test {
         ctx.do_if_zero(&zero, |ctx| {
             ctx.set_var(&mut should_be_set.get_byte_ref(), value);
         });
-        let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+        let code = ctx.build_code();
+        let mut run = interpreter::BfInterpreter::new_with_code(code);
         run.run(&mut BlankIO, &mut BlankIO).unwrap();
         assert_eq!(run.cells[should_be_set.pointer.start + 1], value);
     }
@@ -1134,9 +1159,10 @@ mod test {
                 }
             }
             matching.build();
+            let code = ctx.build_code();
             println!("{test_value:?}");
-            println!("{}\n\n", &ctx.code);
-            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            println!("{}\n\n", code);
+            let mut run = interpreter::BfInterpreter::new_with_code(code);
             run.run(&mut BlankIO, &mut BlankIO).unwrap();
             assert_eq!(run.cells[should_set.pointer.start + 1], to_set_to);
         }
@@ -1149,7 +1175,8 @@ mod test {
                 let dividend_var = ctx.declare_and_set_byte(dividend);
                 let divisor_var = ctx.declare_and_set_byte(divisor);
                 let answer = ctx.divide(dividend_var, divisor_var);
-                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                let code = ctx.build_code();
+                let mut run = interpreter::BfInterpreter::new_with_code(code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 let quotient_correct = dividend / divisor;
                 let remainder_correct = dividend % divisor;
@@ -1177,7 +1204,8 @@ mod test {
                     &mut second_var.get_byte_ref(),
                     &mut output.get_byte_ref(),
                 );
-                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                let code = ctx.build_code();
+                let mut run = interpreter::BfInterpreter::new_with_code(code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 assert_eq!(run.cells[output.pointer.start + 1], first * second);
             }
@@ -1197,7 +1225,8 @@ mod test {
                         &mut output.get_byte_ref(),
                         destroy,
                     );
-                    let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                    let code = ctx.build_code();
+                    let mut run = interpreter::BfInterpreter::new_with_code(code);
                     run.run(&mut BlankIO, &mut BlankIO).unwrap();
                     assert_eq!(run.cells[output.pointer.start + 1], first * second);
                 }
@@ -1220,8 +1249,9 @@ mod test {
                     &mut pow_var.get_byte_ref(),
                     &mut output.get_byte_ref(),
                 );
-                println!("{}", ctx.code);
-                let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+                let code = ctx.build_code();
+                println!("{}", code);
+                let mut run = interpreter::BfInterpreter::new_with_code(code);
                 run.run(&mut BlankIO, &mut BlankIO).unwrap();
                 println!("{base}^{pow}");
                 assert_eq!(run.cells[output.pointer.start + 1], base.pow(pow.into()));
@@ -1234,8 +1264,9 @@ mod test {
             let mut ctx = BfContext::default();
             let var = ctx.declare_and_set_byte(num);
             ctx.display_byte_as_decimal(var);
-            println!("{}", ctx.code);
-            let mut run = interpreter::BfInterpreter::new_with_code(ctx.code);
+            let code=ctx.build_code();
+            println!("{}", code);
+            let mut run = interpreter::BfInterpreter::new_with_code(code);
             let mut out: Vec<u8> = Vec::new();
             run.run(&mut out, &mut BlankIO).unwrap();
             assert_eq!(out, format!("{num}").as_bytes());
