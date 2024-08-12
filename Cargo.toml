@@ -2,6 +2,11 @@
 name = "bfbackend"
 version = "0.1.0"
 edition = "2021"
+authors = ["haccerman"]
+license = "Apache-2.0 OR MIT"
+description = "Compiler backend for brainfuck"
+repository = "https://github.com/jacks0n9/bfbackend"
+documentation = "https://docs.rs/bfbackend"
 
 [dependencies]
 bftextmaker = "0.2.0"
