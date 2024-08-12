@@ -1264,7 +1264,7 @@ mod test {
             let mut ctx = BfContext::default();
             let var = ctx.declare_and_set_byte(num);
             ctx.display_byte_as_decimal(var);
-            let code=ctx.build_code();
+            let code = ctx.build_code();
             println!("{}", code);
             let mut run = interpreter::BfInterpreter::new_with_code(code);
             let mut out: Vec<u8> = Vec::new();
