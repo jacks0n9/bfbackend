@@ -63,7 +63,7 @@ impl BfContext<NormalState> {
             },
         )
     }
-    pub fn add_to_var<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, to_add: Signedu8)
+    pub fn add_to_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, to_add: Signedu8)
     where
         ByteRef<'a, T>: MarkSet,
     {
@@ -103,7 +103,7 @@ impl BfContext<NormalState> {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
-    pub fn set_var<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, value: u8)
+    pub fn set_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, value: u8)
     where
         ByteRef<'a, T>: HasBeenSet + Pointable + MarkSet,
     {
@@ -449,7 +449,7 @@ impl BfContext<NormalState> {
     /// Same as do_if_nonzero, but generates less code by mutating the byte you are checking
     pub fn do_if_nonzero_mut<T>(
         &mut self,
-        byte_to_check: MutableByteRef<'_, T>,
+        byte_to_check: ByteRef<T>,
         code: impl FnOnce(&mut BfContext<NormalState>),
     ) {
         self.loop_over_cell(byte_to_check.pointer, |ctx| {
@@ -496,13 +496,13 @@ impl BfContext<NormalState> {
     /// Sets num2 to zero
     pub fn multiply<'a, 'b, 'c, A, B, C>(
         &mut self,
-        num1: &mut MutableByteRef<'a, A>,
-        num2: &mut MutableByteRef<'b, B>,
-        output: &mut MutableByteRef<'c, C>,
+        num1: &mut ByteRef<'a, A>,
+        num2: &mut ByteRef<'b, B>,
+        output: &mut ByteRef<'c, C>,
     ) where
-        MutableByteRef<'a, A>: MarkSet,
-        MutableByteRef<'b, B>: MarkSet,
-        MutableByteRef<'c, C>: MarkSet,
+        ByteRef<'a, A>: MarkSet,
+        ByteRef<'b, B>: MarkSet,
+        ByteRef<'c, C>: MarkSet,
     {
         self.loop_over_cell(num2.pointer, |ctx| {
             // subtract one from num2 because we are looping over it
@@ -531,13 +531,13 @@ impl BfContext<NormalState> {
     /// If destroy_num1 is false, then the contents of num1 will be preserved at the cost of more code being generatedk
     pub fn multiply_const<'a, 'b, A, B>(
         &mut self,
-        num1: &mut MutableByteRef<'a, A>,
+        num1: &mut ByteRef<'a, A>,
         num2: u8,
-        output: &mut MutableByteRef<'b, B>,
+        output: &mut ByteRef<'b, B>,
         destroy_num1: bool,
     ) where
-        MutableByteRef<'a, A>: MarkSet,
-        MutableByteRef<'b, B>: MarkSet,
+        ByteRef<'a, A>: MarkSet,
+        ByteRef<'b, B>: MarkSet,
     {
         if destroy_num1 {
             self.loop_over_cell(num1.pointer, |ctx| {
@@ -621,12 +621,12 @@ impl BfContext<NormalState> {
     pub fn pow<'a, 'b, 'c, A, B, C>(
         &mut self,
         base: &mut ByteRef<'a, A>,
-        exponent: &mut MutableByteRef<'b, B>,
-        output: &mut MutableByteRef<'c, C>,
+        exponent: &mut ByteRef<'b, B>,
+        output: &mut ByteRef<'c, C>,
     ) where
-        MutableByteRef<'a, A>: MarkSet,
-        MutableByteRef<'b, B>: MarkSet,
-        MutableByteRef<'c, C>: MarkSet,
+        ByteRef<'a, A>: MarkSet,
+        ByteRef<'b, B>: MarkSet,
+        ByteRef<'c, C>: MarkSet,
     {
         self.point(output.pointer);
         self.write_code("+");
@@ -655,9 +655,9 @@ impl BfContext<NormalState> {
             ctx.move_byte(&mut temp_output.get_byte_ref(), output);
         });
     }
-    pub fn in_place_add<'a, T>(&mut self, byte_to_set: &mut MutableByteRef<'a, T>, to_add: Signedu8)
+    pub fn in_place_add<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, to_add: Signedu8)
     where
-        MutableByteRef<'a, T>: MarkSet,
+        ByteRef<'a, T>: MarkSet,
     {
         self.in_place_add_cell(byte_to_set.pointer, to_add);
         byte_to_set.mark_set();
@@ -839,8 +839,7 @@ pub struct ByteRef<'a, T> {
     pointer: usize,
     var: &'a mut Variable<T>,
 }
-/// Alias for ByteRef to hint that the function taking the MutableByteRef may mutate your data
-pub type MutableByteRef<'a, T> = ByteRef<'a, T>;
+
 pub trait MarkSet {
     fn mark_set(&mut self);
 }
