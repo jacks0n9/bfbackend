@@ -39,6 +39,7 @@ impl BfContext<NormalState> {
         self.taken.push(range);
         self.taken.sort_by_key(|a| a.end())
     }
+    /// Declare a variable with data and reserve memory for it
     pub fn declare_and_reserve<T>(&mut self, size: usize, data: T) -> Variable<T> {
         let our_range = self.reserve(size);
         Variable {
@@ -46,6 +47,7 @@ impl BfContext<NormalState> {
             pointer: our_range,
         }
     }
+    /// Declare a Variable with ByteData data
     pub fn declare_byte(&mut self) -> Variable<ByteData> {
         self.declare_and_reserve(
             2,
@@ -54,6 +56,7 @@ impl BfContext<NormalState> {
             },
         )
     }
+    /// Declare an array of a specified length set to all zeros
     pub fn declare_array(&mut self, len: usize) -> Variable<ArrayData> {
         self.declare_and_reserve(
             len + 1,
@@ -63,6 +66,8 @@ impl BfContext<NormalState> {
             },
         )
     }
+    /// Add to a Variable using two bytes of memory, one as a temporary cell and one to add to.
+    /// The start of the pointer of the variable referenced by byte_to_set must be zero, and will be set to zero after this function returns
     pub fn add_to_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, to_add: Signedu8)
     where
         ByteRef<'a, T>: MarkSet,
@@ -103,6 +108,8 @@ impl BfContext<NormalState> {
             self.write_code(&if !to_add.negative { "+" } else { "-" }.repeat(to_add.value as usize))
         }
     }
+    /// Same as adding to a variable, only the variable will be cleared if it has been set,
+    /// adding three instructions to do so.
     pub fn set_var<'a, T>(&mut self, byte_to_set: &mut ByteRef<'a, T>, value: u8)
     where
         ByteRef<'a, T>: HasBeenSet + Pointable + MarkSet,
@@ -119,6 +126,7 @@ impl BfContext<NormalState> {
             },
         )
     }
+    /// Set an array efficiently by updating multiple cells at a time instead of one-by-one
     pub fn set_array(&mut self, var: &mut Variable<ArrayData>, values: &[u8]) {
         let signed: Vec<_> = values
             .iter()
@@ -133,12 +141,16 @@ impl BfContext<NormalState> {
         }
         self.transform_array(var, &signed);
     }
+    /// Add to the cell pointer
     pub fn point_add(&mut self, add: usize) {
         self.point(self.pointer + add)
     }
+    /// Subtract from the cell pointer
     fn point_sub(&mut self, sub: usize) {
         self.point(self.pointer - sub)
     }
+    /// Execute the function you pass in to generate code that will be run while to_loop_over is nonzero.
+    /// Points back to to_loop_over after your code is run.
     pub fn loop_over_cell(
         &mut self,
         to_loop_over: usize,
@@ -152,12 +164,14 @@ impl BfContext<NormalState> {
         self.write_code("]");
         self.must_free -= 1;
     }
+    /// Move the cell pointer to a location you specify, commonly a usize
     pub fn point<T: Pointable>(&mut self, location: T) {
         let location = location.get_pointer();
         let diff = location.abs_diff(self.pointer);
         self.write_code(&if location > self.pointer { ">" } else { "<" }.repeat(diff));
         self.pointer = location
     }
+    /// Clear all the cells in a type which implements GetRange, such as MemoryRange or Variable.
     pub fn clear_cells<T: GetRange>(&mut self, var: &T) {
         let range = var.get_range();
         self.point(range.start);
@@ -166,6 +180,7 @@ impl BfContext<NormalState> {
             self.point_add(1);
         }
     }
+    /// Efficiently output text without having to store the whole string in memory.
     pub fn display_text(&mut self, text: &str) {
         let (generated, used) = bftextmaker::gen_code(text, 15);
         //-1 for loop pointer which is not needed
@@ -175,6 +190,7 @@ impl BfContext<NormalState> {
         self.pointer = (text_var.pointer.start + text_var.pointer.offset) - 1;
         self.free_optional(text_var);
     }
+    /// Displays every cell in a Variable.
     pub fn display_var<T>(&mut self, var: &Variable<T>) {
         self.point(var.pointer.start);
         for _ in 1..var.pointer.end() {
@@ -182,6 +198,8 @@ impl BfContext<NormalState> {
             self.write_code(".");
         }
     }
+    /// Displays an array which is ended by a null byte. Null byte can be anywhere in array.
+    /// Array must start with a null byte, which should be the case if using any function in BfContext.
     pub fn display_null_terminated_array(&mut self, var: &Variable<ArrayData>) {
         self.point(var.pointer.start);
         // make sure the loop pointer is empty
@@ -191,6 +209,7 @@ impl BfContext<NormalState> {
         // return to loop pointer
         self.write_code("<[<]")
     }
+    /// Read a single character
     pub fn read_char<'a, T>(&mut self, mut store_to: ByteRef<'a, T>)
     where
         ByteRef<'a, T>: MarkSet,
@@ -241,6 +260,7 @@ impl BfContext<NormalState> {
             ctx.write_code("+");
         });
     }
+    /// Clone all cells of a variable, returning another variable of the same size and type
     pub fn clone_var<T: Clone>(&mut self, var: &Variable<T>) -> Variable<T> {
         let cloned = self.declare_and_reserve(var.pointer.offset, var.var_data.clone());
         let temp_cell = self.reserve(1).start;
@@ -253,6 +273,7 @@ impl BfContext<NormalState> {
         }
         cloned
     }
+    /// Clear all cells in a range and allow them to be used by other code.
     pub fn free<T: GetRange>(&mut self, to_free: T) {
         let range = to_free.get_range();
         self.clear_cells(&to_free);
@@ -263,6 +284,7 @@ impl BfContext<NormalState> {
             .filter(|filter_range| filter_range.start != range.start)
             .collect();
     }
+    /// Free a range if in a loop.
     pub fn free_optional<T: GetRange>(&mut self, to_free: T) {
         if self.must_free != 0 {
             self.free(to_free);
@@ -287,6 +309,7 @@ impl BfContext<NormalState> {
             ctx.write_code("+");
         });
     }
+    /// Run code if the left > right.
     pub fn do_if_left_greater_than_right(
         &mut self,
         left: Variable<ByteData>,
@@ -354,6 +377,7 @@ impl BfContext<NormalState> {
         self.free_optional(is_empty);
         self.free_optional(is_not_empty);
     }
+    /// Run code if left < right
     pub fn do_if_left_less_than_right(
         &mut self,
         left: Variable<ByteData>,
@@ -362,6 +386,7 @@ impl BfContext<NormalState> {
     ) {
         self.do_if_left_greater_than_right(right, left, code);
     }
+    /// Run code if left == right
     pub fn do_if_equal(
         &mut self,
         left: &Variable<ByteData>,
@@ -422,7 +447,7 @@ impl BfContext<NormalState> {
         self.free_optional(comparison_space);
     }
     /// Execute code if the variable's data is non-zero
-    /// This requires a &Variable<ByteData> to be passed in rather than a ByteRef
+    /// This requires a `&Variable<ByteData>` to be passed in rather than a ByteRef
     /// This is because this code is dependent on there being an extra cell directly to the left of the variable being checked
     pub fn do_if_nonzero(
         &mut self,
@@ -479,7 +504,7 @@ impl BfContext<NormalState> {
             codes: HashMap::new(),
         }
     }
-    /// Moves origin into destination, not emptying destination and esentially adding the two values together.
+    /// Moves origin into destination, not emptying destination and essentially adding the two values together.
     pub fn move_byte<'a, 'b, A, B>(
         &mut self,
         origin: &mut ByteRef<'a, A>,
